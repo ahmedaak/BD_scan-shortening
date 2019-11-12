@@ -1,0 +1,250 @@
+"0","rm(list=ls())"
+"0","library(readr)"
+"0","library(reshape2)"
+"0","library(ggplot2)"
+"0","library(car)"
+"2","Lade nötiges Paket: carData
+"
+"0","library(MethComp)"
+"2","Lade nötiges Paket: nlme
+"
+"0","library(rcompanion)"
+"0","library(lme4)"
+"2","Lade nötiges Paket: Matrix
+"
+"2","
+Attache Paket: ‘lme4’
+
+"
+"2","The following object is masked from ‘package:nlme’:
+
+    lmList
+
+"
+"0","library(lattice)"
+"0","library(lmerTest)"
+"2","
+Attache Paket: ‘lmerTest’
+
+"
+"2","The following object is masked from ‘package:lme4’:
+
+    lmer
+
+"
+"2","The following object is masked from ‘package:stats’:
+
+    step
+
+"
+"0","library(lmtest)"
+"2","Lade nötiges Paket: zoo
+"
+"2","
+Attache Paket: ‘zoo’
+
+"
+"2","The following objects are masked from ‘package:base’:
+
+    as.Date, as.Date.numeric
+
+"
+"0","library(MCMCglmm)"
+"2","Lade nötiges Paket: coda
+"
+"2","Lade nötiges Paket: ape
+"
+"0","library(stats)"
+"0","library(irr)"
+"2","Lade nötiges Paket: lpSolve
+"
+"0","library(caret)"
+"0","library(stargazer)"
+"2","
+Please cite as: 
+
+"
+"2"," Hlavac, Marek (2018). stargazer: Well-Formatted Regression and Summary Statistics Tables.
+"
+"2"," R package version 5.2.2. https://CRAN.R-project.org/package=stargazer 
+
+"
+"0","library(ordinal)"
+"2","
+Attache Paket: ‘ordinal’
+
+"
+"2","The following objects are masked from ‘package:lme4’:
+
+    ranef, VarCorr
+
+"
+"2","The following objects are masked from ‘package:nlme’:
+
+    ranef, VarCorr
+
+"
+"0","library(Hmisc)"
+"2","Lade nötiges Paket: survival
+"
+"2","
+Attache Paket: ‘survival’
+
+"
+"2","The following object is masked from ‘package:caret’:
+
+    cluster
+
+"
+"2","Lade nötiges Paket: Formula
+"
+"2","
+Attache Paket: ‘Hmisc’
+
+"
+"2","The following object is masked from ‘package:ape’:
+
+    zoom
+
+"
+"2","The following objects are masked from ‘package:base’:
+
+    format.pval, units
+
+"
+"0","library(caTools)"
+"0","library(effects)"
+"2","Use the command
+    lattice::trellis.par.set(effectsTheme())
+  to customize lattice options for effects plots.
+See ?efffectsTheme for details.
+"
+"0","library(coefplot)"
+"0","library(blandr)"
+"0","library(dplyr)"
+"2","
+Attache Paket: ‘dplyr’
+
+"
+"2","The following objects are masked from ‘package:Hmisc’:
+
+    src, summarize
+
+"
+"2","The following object is masked from ‘package:ordinal’:
+
+    slice
+
+"
+"2","The following object is masked from ‘package:nlme’:
+
+    collapse
+
+"
+"2","The following object is masked from ‘package:car’:
+
+    recode
+
+"
+"2","The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+"
+"2","The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+"
+"0","library(psych)"
+"2","
+Attache Paket: ‘psych’
+
+"
+"2","The following object is masked from ‘package:Hmisc’:
+
+    describe
+
+"
+"2","The following object is masked from ‘package:ordinal’:
+
+    income
+
+"
+"2","The following object is masked from ‘package:car’:
+
+    logit
+
+"
+"2","The following objects are masked from ‘package:ggplot2’:
+
+    %+%, alpha
+
+"
+"0","library(tidyr) "
+"2","
+Attache Paket: ‘tidyr’
+
+"
+"2","The following object is masked from ‘package:Matrix’:
+
+    expand
+
+"
+"2","The following object is masked from ‘package:reshape2’:
+
+    smiths
+
+"
+"0","library(ggthemes)"
+"0","library(ggpubr)"
+"2","Lade nötiges Paket: magrittr
+"
+"2","
+Attache Paket: ‘magrittr’
+
+"
+"2","The following object is masked from ‘package:tidyr’:
+
+    extract
+
+"
+"2","
+Attache Paket: ‘ggpubr’
+
+"
+"2","The following object is masked from ‘package:ape’:
+
+    rotate
+
+"
+"0","library(extrafont)"
+"2","Registering fonts with R
+"
+"0","library(lemon)"
+"0","library(knitr)"
+"0","library(kableExtra)"
+"0","library(vioplot)"
+"2","Lade nötiges Paket: sm
+"
+"2","Package 'sm', version 2.2-5.5: type help(sm) for summary information
+"
+"0","library(officer)"
+"0","library(flextable)"
+"2","
+Attache Paket: ‘flextable’
+
+"
+"2","The following objects are masked from ‘package:ggpubr’:
+
+    border, font, rotate
+
+"
+"2","The following object is masked from ‘package:ape’:
+
+    rotate
+
+"
+"0","library(MuMIn)"
+"0","library(flextable)"
+"0","library(ggpubr)"

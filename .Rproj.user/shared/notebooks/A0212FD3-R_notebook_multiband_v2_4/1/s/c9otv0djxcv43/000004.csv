@@ -1,0 +1,4 @@
+"0","#save BA as pdf"
+"0","ggsave(""bla_alt_all_four.png"", figure_BA, width = 25, height = 20, units = ""cm"", dpi = 500 )"
+"0","ggsave(""bla_alt_all_four.pdf"", figure_BA, width = 25, height = 20, units = ""cm"", dpi = 500 )"
+"0","ggsave(""bla_alt_all_four.tiff"", figure_BA, width = 25, height = 20, compression = ""lzw"", units = ""cm"")"

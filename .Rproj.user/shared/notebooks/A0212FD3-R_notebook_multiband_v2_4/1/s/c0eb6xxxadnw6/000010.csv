@@ -1,0 +1,41 @@
+"0","for (y in 1:length(segments_23)) {"
+"0","  volumes_subset_y<-get(paste(segments_23[y],""volumes_subset_data"", sep = ""_""))"
+"0","  namy<-paste(""RS_E"", segments_23[y], sep="""") "
+"0","  assign(namy, BlandAltman(E23_volumes_subset_data$Volume, volumes_subset_y$Volume, maintit= paste(""Segments E and"", segments_23[y]),xlab=""Mean (mL)"", ylab= ""Difference (mL)"", pch=16, print=FALSE))"
+"0","}"
+"1","NOTE:
+"
+"1"," "
+"1","'AB.plot' and 'BlandAltman' are deprecated,
+ and likely to disappear"
+"1"," "
+"1","in a not too distant future,
+ use 'BA.plot' instead.
+"
+"1","NOTE:
+"
+"1"," "
+"1","'AB.plot' and 'BlandAltman' are deprecated,
+ and likely to disappear"
+"1"," "
+"1","in a not too distant future,
+ use 'BA.plot' instead.
+"
+"1","NOTE:
+"
+"1"," "
+"1","'AB.plot' and 'BlandAltman' are deprecated,
+ and likely to disappear"
+"1"," "
+"1","in a not too distant future,
+ use 'BA.plot' instead.
+"
+"1","NOTE:
+"
+"1"," "
+"1","'AB.plot' and 'BlandAltman' are deprecated,
+ and likely to disappear"
+"1"," "
+"1","in a not too distant future,
+ use 'BA.plot' instead.
+"

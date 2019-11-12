@@ -1,0 +1,1694 @@
+---
+title: "The effect of scan length on the assessment of perfusion using BOLD delay in ischemic stroke"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+This script analyzes and visualizes data from the study **The effect of scan length on the assessment of perfusion using BOLD delay in ischemic stroke**.
+
+
+## install packages required
+```{r, echo=FALSE, warning=FALSE, include=FALSE}
+rm(list=ls())
+library(readr)
+library(reshape2)
+library(ggplot2)
+library(car)
+library(MethComp)
+library(rcompanion)
+library(lme4)
+library(lattice)
+library(lmerTest)
+library(lmtest)
+library(MCMCglmm)
+library(stats)
+library(irr)
+library(caret)
+library(stargazer)
+library(ordinal)
+library(Hmisc)
+library(caTools)
+library(effects)
+library(coefplot)
+library(blandr)
+library(dplyr)
+library(psych)
+library(tidyr) 
+library(ggthemes)
+library(ggpubr)
+library(extrafont)
+library(lemon)
+library(knitr)
+library(kableExtra)
+library(vioplot)
+library(officer)
+library(flextable)
+library(MuMIn)
+library(flextable)
+library(ggpubr)
+```
+#prepare the data
+```{r, echo=FALSE, warning=FALSE}
+#define datapath
+data_path <- c("R_github")
+# load in volume data
+volumes_output <- data.frame(read.csv(paste(data_path, "volumes_output_26_11.csv",sep="/"), 
+    sep = ";"), stringsAsFactors = FALSE) 
+#change volume column to numeric and use period instead of commas for R language
+volumes_output$Volume<-as.numeric(gsub(",",".",volumes_output$Volume))
+print("Volumes Output Data")
+str(volumes_output)
+#descriptive statistics on data
+Hmisc::describe(volumes_output[,c(-3,-4)])
+```
+
+
+
+
+## Subset the data regarding volumes based on segments and time shift thresholds applied
+
+```{r, echo=FALSE, warning=FALSE}
+#get A0,A23,A46 df(same applies to B,C,D,E)
+prefixes <- c("A0", "B0", "C0", "D0", "E0", "A23","B23", "C23", "D23", "E23", "A46", "B46", "C46", "D46", "E46")
+for(i in prefixes) {
+#subset these dataframes based on these prefixes indicating the segment and the time shift threshold applied 
+volumes_subset_data <- volumes_output[grep (paste("^",i,sep = ""), volumes_output$Mask), ]
+assign(paste(i,"volumes_subset_data", sep = "_"),volumes_subset_data[,c(-2,-4)])
+#these outcome dataframes are of 55 observations and 3 variables(Subject, Mask, Volume)
+}
+
+
+```
+
+```{r, echo=FALSE, warning=FALSE}
+theme_tufte_revised <- function(base_size = 11, base_family = base_font_family_tufte(), ticks = TRUE) {
+  ret <- theme_bw(base_family = base_family, base_size = base_size) + 
+    theme(
+          axis.line = element_line(color = 'black'),
+          axis.title.x = element_text(vjust = -0.3), 
+          axis.title.y = element_text(vjust = 0.8),
+          legend.background = element_blank(), 
+          legend.key = element_blank(), 
+          legend.title = element_text(face="plain"),
+          panel.background = element_blank(), 
+          panel.border = element_blank(),
+          panel.grid = element_blank(),
+          plot.background = element_blank(),
+          strip.background = element_blank()
+    )
+
+  if (!ticks) {
+    ret <- ret + theme(axis.ticks = element_blank())
+  }
+
+  ret
+} 
+
+
+
+```
+
+
+
+## Run Bland Altman Analysis
+
+```{r, echo=FALSE, warning=FALSE, fig.height=8, fig.width=10, results="asis"}
+
+#execute Bland Altman Analysis at different thresholds for 4 comparisons (E-D, E-C,..); 
+segments_23<- c("A23", "B23", "C23", "D23")
+#arrange the plot margins just so that legends fit well
+par(mar=c(5,5.5,5.5,5))
+par(mfrow=c(2,2))
+
+
+#use Blandr function, loop through segments at only 2.3 threshold
+
+
+for (x in 1:length(segments_23)) {
+  volumes_subset_x <- get(paste(segments_23[x],"volumes_subset_data", sep = "_"))
+  BA_23<-paste("RS_E", segments_23[x], sep="_") 
+  assign (BA_23, blandr.draw(E23_volumes_subset_data$Volume, volumes_subset_x$Volume, ciDisplay = FALSE, ciShading=TRUE,plotProportionalBias = TRUE, plotProportionalBias.se = TRUE, point_size = 25, plotTitle="") +geom_point(size = 0.1)+geom_hline(yintercept = 0, color = "black", size = 0.8)+xlab(" Average (mL)")+ylab(" Difference (mL)")+theme_tufte_revised(base_size = 20, base_family = "sans")+theme(axis.title.y = element_text(size=20, hjust=0.5,margin = margin(t = 0, r = 15, b = 0, l = 0)))+ylim(-150,150)+theme(axis.title.x = element_text(size=20, hjust=0.5,margin = margin(t = 15, r = 0, b = 0, l = 0))) )
+}
+
+
+figure_BA<- ggarrange(RS_E_D23, RS_E_C23, RS_E_B23, RS_E_A23, labels = c("A", "B", "C", "D"))
+#figure_BA<-annotate_figure(figure_BA, left= text_grob("Difference", size=20, rot=90, vjust=0.3), bottom=text_grob("Average", size=20, hjust=0.5, vjust=0.1))
+
+
+print(figure_BA)
+#save BA as pdf
+ggsave("bla_alt_all_four.png", figure_BA, width = 25, height = 20, units = "cm", dpi = 500 )
+ggsave("bla_alt_all_four.pdf", figure_BA, width = 25, height = 20, units = "cm", dpi = 500 )
+ggsave("bla_alt_all_four.tiff", figure_BA, width = 25, height = 20, compression = "lzw", units = "cm")
+
+
+```
+## Violin plot the volumes
+```{r, echo=FALSE, warning=FALSE}
+thresholds<- c("0", "23", "46")
+for (i in thresholds) {
+  vioplot(x=get(paste("E", i,"_volumes_subset_data", sep=""))$Volume,get(paste("D", i,"_volumes_subset_data", sep=""))$Volume, get(paste("C", i,"_volumes_subset_data", sep=""))$Volume,get(paste("B", i,"_volumes_subset_data", sep=""))$Volume,get(paste("A", i,"_volumes_subset_data", sep=""))$Volume, names = c( "full scan", "0.8 scan", "0.6 scan", "0.4 scan", "0.2 scan"))
+  title(xlab="Scan Segment", ylab="Volume", main=c(paste(i,"Threshold")))
+}
+
+```
+
+## DC CC calculation across segments
+
+```{r, echo=FALSE, warning=FALSE}
+#calculated and two different coefficients across subjects for visualising spatial correlation between shorter scans and full scan
+#load dice coefficient and correlation coefficient data
+#only dice coefficient as needed for melt function
+#at 2.3 thr-since we decided to report 2.3 thr
+dc_subs <- read.csv(paste(data_path,"dice_23thr.csv",sep="/"), sep=";")
+#only correlation coefficient at 4.6 thr- did not calculate it at 2.3 thr 
+cc_subs<- read.csv(paste(data_path,"cc_23thr.csv",sep="/"),sep = ";")
+
+#violin plot dc and cc data
+# make dataframe long with melt for ggplot
+dc_subs_long<- melt (data = dc_subs, value.name=c("value"))
+cc_subs_long<- melt (data = cc_subs, value.name=c("value"))
+#reset the margins
+par(mar=c(5,5,5,5))
+#use median and interquartiles together with violin plots for dice coef calculated at maps thresholded to 2.3 s
+
+vplot_fig_dc<- ggplot(dc_subs_long, aes(x=variable, y=value))+geom_violin(fill="#bdbdbd", color="#636363", adjust=0.5)+geom_boxplot(width=0.09)+labs(x=" Scan segments", y="Dice similarity coefficient")+theme_tufte_revised(base_size = 27, base_family = "sans")+theme(axis.title.y = element_text(size=25, hjust=0.5,margin = margin(t = 0, r = 30, b = 0, l = 0)))+theme(axis.title.x = element_text(size=22, hjust=0.5,margin = margin(t = 25, r = 0, b = 0, l = 0)))+ scale_x_discrete(labels= c("0.8 scan", "0.6 scan", "0.4 scan", "0.2 scan"))+ylim(0,1)
+print(vplot_fig_dc)
+#save the plot as pdf
+ggsave("dice_23_vplot.png", vplot_fig_dc, width = 30, height = 20, units = "cm", dpi = 500)
+ggsave("dice_23_vplot.pdf", vplot_fig_dc, width = 30, height = 20, units = "cm", dpi = 500)
+ggsave("dice_23_vplot.tiff", vplot_fig_dc, width = 30, height = 20, units = "cm", compression = "lzw")
+
+# make the linear mixed model for tracking the decrease in DC caused by scan shortening by 0.2 
+lmer_dc<-lmer(value ~ variable+(1|subject), data=dc_subs_long)
+summary(lmer_dc)
+r.squaredGLMM(lmer_dc)
+```
+
+## Prepare the data for mixed models
+```{r, echo=FALSE, warning=FALSE}
+#PATIENTS WITH HYPOPERFUSION IN SESSION 1
+#pull subjects name assign them to a variable
+#this is a factor vector of 42 levels
+subjects<-read.csv(paste(data_path, "all_subs_new", sep="/"),sep=";", header=F)$V1
+#define a character vector for the for loop
+segments<- c("RS_A", "RS_B", "RS_C", "RS_D", "RS_E")
+segment<- c("RS_A", "RS_B", "RS_C", "RS_D", "RS_E") 
+#make a vector with segments name to be concatenated later 
+fd_mean_all_ses1 <- c(segments)
+fd_max_all_ses1<- c(segments)
+
+#define two for loops with first one looping through subjects and second one through segments
+for (i in 1:length(subjects)) {
+mean_seg_ses1 <- c()
+max_seg_ses1<- c()
+
+      for (x in segments) {
+        #load fd files from each segment
+  
+      x_i_fd.txt<- read.csv(paste(data_path,subjects[i], "session_1", x, "fd.txt", sep="/"), sep=";")
+      nam_mean_x<- paste(subjects[i], x,"mean", sep="_")
+    #assign head motion mean to a variable in the for loop
+    assign(nam_mean_x, mean(x_i_fd.txt[,1]))
+    #assign head motion max to a variable 
+    nam_max_x<- paste(subjects[i], x, "max", sep="_")
+    assign(nam_max_x, max(x_i_fd.txt[,1]))
+    #concatenate mean and max values of each segment by rbind for one subject
+    mean_seg_ses1<- rbind(mean_seg_ses1, get(nam_mean_x))
+    max_seg_ses1<-rbind(max_seg_ses1, get(nam_max_x))
+      }
+  #define it as dataframe for one subject with 5 obs. of 1 variable  
+  mean_seg_ses1 <- data.frame(mean_seg_ses1)
+  #give a column name corresponding to the name of that subject
+  colnames(mean_seg_ses1) <- subjects[i]
+  #do a cbind with the vector defined before the loop, giving rownames
+  fd_mean_all_ses1 <- cbind(fd_mean_all_ses1, mean_seg_ses1)
+  #same process applies to head motion max
+  max_seg_ses1<- data.frame(max_seg_ses1)
+  colnames(max_seg_ses1) <- subjects[i]
+ fd_max_all_ses1<-cbind(fd_max_all_ses1, max_seg_ses1)
+ 
+
+}
+#PATIENTS WITH HYPOPERFUSION IN SESSION 1 AND 2
+#pull the data consisting of subject names
+#this is factor vector of 12 levels
+subjects_2<-read.csv(paste(data_path, "new_day1_2", sep="/"),sep=";",header=F)$V1
+#define two vectors with segment names
+fd_max_all_ses2<- c(segments)
+fd_mean_all_ses2<- c(segments)
+#make two for loops one for subject smaller one for segments
+for (i in 1:length(subjects_2)) {
+mean_seg_ses2<- c()
+max_seg_ses2<- c()
+
+   
+    for (z in segments){
+        z_i_fd.txt<- read.csv(paste(data_path, subjects_2[i], "session_2", z, "fd.txt", sep="/"))
+        #assign the head motion mean to a variable
+        nam_mean_z<- paste(subjects_2[i], z, "mean", sep="_")
+        assign(nam_mean_z, mean(z_i_fd.txt[,1]))
+        #head motion max to a variable
+        nam_max_z<- paste(subjects_2[i], z, "max", sep="_")
+        assign(nam_max_z, max(z_i_fd.txt[,1]))
+        #concetenate empty vectors
+    mean_seg_ses2<- rbind(mean_seg_ses2, get(nam_mean_z))
+    max_seg_ses2<-rbind(max_seg_ses2, get(nam_max_z))
+        }
+  
+mean_seg_ses2<-data.frame(mean_seg_ses2) 
+  colnames(mean_seg_ses2) <- subjects_2[i]
+ fd_mean_all_ses2 <- cbind(fd_mean_all_ses2, mean_seg_ses2)
+  max_seg_ses2<- data.frame(max_seg_ses2)
+  colnames(max_seg_ses2) <- subjects_2[i]
+  fd_max_all_ses2<- cbind(fd_max_all_ses2, max_seg_ses2)
+
+}
+
+#add a vector to volumes_output dataframe consisting of thresholds applied
+
+volumes_output$thr<-gsub('.*(46).*', '46', volumes_output$Mask)
+volumes_output$thr<-gsub('.*(23).*', '23', volumes_output$thr)
+volumes_output$thr<-gsub('.*(0).*', '0', volumes_output$thr)
+volumes_output$thr<- as.factor(volumes_output$thr)
+
+
+
+#fd_mean/max_all_ses1/ses2 are data frames with segments being colnames, they need to be transposed for further analysis
+#First columns are got rid of and and the data frames are transposed. Outcomes are then rbinded inn a way where ses1 is above ses2 for mean and max data separately
+
+trans_mean_ses1<-as.data.frame(t(fd_mean_all_ses1[,-1]))
+trans_mean_ses2<-as.data.frame(t(fd_mean_all_ses2[,-1]))
+trans_max_ses1<- as.data.frame(t(fd_max_all_ses1[,-1]))
+trans_max_ses2<-as.data.frame(t(fd_max_all_ses2[,-1]))
+trans_mean_ses12<-rbind(as.data.frame(t(fd_mean_all_ses1[,-1])),as.data.frame(t(fd_mean_all_ses2[,-1])))
+trans_max_ses12<-rbind(as.data.frame(t(fd_max_all_ses1[,-1])),as.data.frame(t(fd_max_all_ses2[,-1])))
+
+#colnames for trans
+colnames(trans_mean_ses1)<- c("RS_A", "RS_B", "RS_C", "RS_D", "RS_E")
+colnames(trans_mean_ses2)<- c("RS_A", "RS_B", "RS_C", "RS_D", "RS_E")
+colnames(trans_max_ses1)<- c("RS_A", "RS_B", "RS_C", "RS_D", "RS_E")
+colnames(trans_max_ses2)<- c("RS_A", "RS_B", "RS_C", "RS_D", "RS_E")
+
+
+#boxplot head motion mean and max data (ses 1 and 2) across segments 
+boxplot(trans_mean_ses12, names = c("0.2 scan", "0.4 scan", "0.6 scan", "0.8 scan", "full scan"), ylab="Head Motion Mean")
+boxplot(trans_max_ses12, names = c("0.2 scan", "0.4 scan", "0.6 scan", "0.8 scan", "full scan"), ylab="Head Motion Max ")
+
+
+#reshape the data with melt function and assign column names
+colname<- c("segments", "subject", "value")
+for (i in c("mean", "max")) {
+  for (x in c("ses1", "ses2")) {
+    nam_melt<- paste("melt","segm", i, x, sep="_" )
+  nam<- paste("fd", i,"all", x, sep="_" )
+ assign(nam_melt, melt(get(nam)))
+ #for adding the same column name in a for loop you need another variable which the initial variable assigned to with get function 
+ get_nam_melt<-get(nam_melt)
+colnames(get_nam_melt)<- colname
+assign(nam_melt,get_nam_melt)
+ }
+}
+
+#rbind two melted dataframes of different sessions based on them being mean or max values
+melt_segm_mean_ses12<- rbind(melt_segm_mean_ses1, melt_segm_mean_ses2)
+melt_segm_max_ses12<- rbind(melt_segm_max_ses1, melt_segm_max_ses2)
+
+# make the dataframe for lmer with volumetry
+#first multiply the melted dataframes by there as you have three thresholds at volume data giving different outputs for each threshold
+melt_max_ses12_expanded<- melt_segm_max_ses12[rep(1:nrow(melt_segm_max_ses12),each=3), 1:3]
+melt_mean_ses12_expanded<- melt_segm_mean_ses12[rep(1:nrow(melt_segm_mean_ses12),each=3), 1:3]
+#make the segments vector as character so that after cbinding this does not return numbers instead of strings
+melt_max_ses12_expanded$segments<-as.character(melt_max_ses12_expanded$segments)
+
+
+
+
+##PATIENTS WITH NO HYPOPERFUSION IN SESSION 1 AND 2
+#pul subjects name assign it to a variable
+subs_nohypo_1<-read.csv(paste(data_path, "subs_nohypo_ses1", sep="/"),header=F)$V1
+subs_nohypo_2<- read.csv(paste(data_path, "subs_nohypo_ses2", sep="/"),header=F)$V1
+#make vectors that are composed of segments name with two for loops
+for (i in c("mean", "max")) {
+  for (x in c("ses1", "ses2")) {
+    nam_nohypo<- paste("fd", i, "nohypo", x, sep="_")
+    assign(nam_nohypo, segments)
+    }
+}
+
+for (i in 1:length(subs_nohypo_1)) {
+mean_seg_nohp_ses1 <- c()
+max_seg_nohp_ses1<- c()
+
+
+
+      for (z in segments) {
+        #read fd files first for session_1
+      z_i_fd.txt<- read.csv(paste(data_path,subs_nohypo_1[i], "session_1", z, "fd.txt", sep="/"))
+      nam_mean_z<- paste(subs_nohypo_1[i], x,"mean", sep="_")
+      #assign mean and max values to variables and rbind them with the empty vectors defined after the first for loop
+      assign(nam_mean_z, mean(z_i_fd.txt[,1]))
+      nam_max_z<- paste(subs_nohypo_1[i], x, "max", sep="_")
+    assign(nam_max_z, max(z_i_fd.txt[,1]))
+    mean_seg_nohp_ses1<- rbind(mean_seg_nohp_ses1, get(nam_mean_z))
+    max_seg_nohp_ses1<-rbind(max_seg_nohp_ses1, get(nam_max_z))
+      }
+ #make data frames for mean and max data at ses1 with no hypoperfusion
+  mean_seg_nohp_ses1 <- data.frame(mean_seg_nohp_ses1)
+  #give one volumn the name of the subject
+  colnames(mean_seg_nohp_ses1) <- subs_nohypo_1[i]
+  #cbind them with the vectors with the names of segments
+  fd_mean_nohypo_ses1 <- cbind(fd_mean_nohypo_ses1, mean_seg_nohp_ses1)
+ max_seg_nohp_ses1<- data.frame(max_seg_nohp_ses1)
+  colnames(max_seg_nohp_ses1) <- subs_nohypo_1[i]
+ fd_max_nohypo_ses1<-cbind(fd_max_nohypo_ses1, max_seg_nohp_ses1)
+    
+}
+      
+  for (i in 1:length(subs_nohypo_2)){
+    mean_seg_nohp_ses2<- c()
+    max_seg_nohp_ses2<- c()
+    
+    for(t in segments){
+        #read fd files for session_2 and do same thing for head motion mean and max calculation
+        t_i_fd.txt<- read.csv(paste(data_path, subs_nohypo_2[i], "session_2", t, "fd.txt", sep="/"))
+        nam_mean_t<- paste(subs_nohypo_2[i], t, "mean", sep="_")
+        assign(nam_mean_t, mean(t_i_fd.txt[,1]))
+        nam_max_t<- paste(subs_nohypo_2[i], t, "max", sep="_")
+        assign(nam_max_t, max(t_i_fd.txt[,1]))
+    mean_seg_nohp_ses2<- rbind(mean_seg_nohp_ses2, get(nam_mean_t))
+    max_seg_nohp_ses2<-rbind(max_seg_nohp_ses2, get(nam_max_t))
+    }
+    
+    mean_seg_nohp_ses2<-data.frame(mean_seg_nohp_ses2) 
+  colnames(mean_seg_nohp_ses2) <- subs_nohypo_1[i]
+fd_mean_nohypo_ses2 <- cbind(fd_mean_nohypo_ses2, mean_seg_nohp_ses2)
+max_seg_nohp_ses2<- data.frame(max_seg_nohp_ses2)
+  colnames(max_seg_nohp_ses2) <- subs_nohypo_1[i]
+  fd_max_nohypo_ses2<- cbind(fd_max_nohypo_ses2, max_seg_nohp_ses2)
+  }
+  
+
+ 
+ #get rid of the first column and give rownames as segment name to dataframes
+for (i in c("mean", "max")) {
+  for (x in c("ses1", "ses2")) {
+  x_i_nohypo<- paste("fd", i, "nohypo",x, sep="_")
+  t<- get(x_i_nohypo)[,-1]
+  rownames(t)<- segments
+  assign(x_i_nohypo,t)
+  }
+}
+ 
+#command above gives the output of dataframes  with 5 observations and 23 variables
+#after transposing we have segments as colnames
+fd_mean_nohypo_final_1<- as.data.frame(t(fd_mean_nohypo_ses1))
+fd_max_nohypo_final_1<- as.data.frame(t(fd_max_nohypo_ses1))
+fd_mean_nohypo_final_2<- as.data.frame(t(fd_mean_nohypo_ses2))
+fd_max_nohypo_final_2<- as.data.frame(t(fd_max_nohypo_ses2))
+
+
+#reshape the nohypoperfusion data with melt function
+for (i in c("mean", "max")) {
+  for (x in c("1", "2")) {
+    
+    nohypo_melt<- paste("melt", i, "nohypo", x,sep="_")
+    nohypo_melt_test<- paste("fd", i, "nohypo", "final", x, sep="_")
+    assign(nohypo_melt, melt(get(nohypo_melt_test)))
+  }
+ 
+  #reshape transposed with hypoperfusion data for the creation of the data frame for qualitative analysis mixed model, since there we need segments to be ordered as a bigger frame and subjects based on that
+  #but in volume data segments were ordered for each subject
+  for (z in c("ses1", "ses2")) {
+    
+    trans_withhypo<- paste("trans", i,z, sep="_")
+    melt_trans<- paste("melt", i, z, sep="_")
+    assign(melt_trans, melt(get(trans_withhypo)))
+  }
+
+}
+
+#had to subset data based on row numbers in order to adjust them to the excel sheet used by raters(excel sheet was organized in a way explained above)
+max_test<- rbind(melt_max_ses1[173:215,], melt_max_nohypo_1[81:100,], melt_max_ses2[49:60,], melt_max_nohypo_2[93:115,], melt_max_ses1[130:172,], melt_max_nohypo_1[61:80,], melt_max_ses2[37:48,], melt_max_nohypo_2[70:92,], melt_max_ses1[87:129,], melt_max_nohypo_1[41:60,], melt_max_ses2[25:36,], melt_max_nohypo_2[47:69,], melt_max_ses1[44:86,], melt_max_nohypo_1[21:40,], melt_max_ses2[13:24,], melt_max_nohypo_2[24:46,],melt_max_ses1[1:43,], melt_max_nohypo_1[1:20,], melt_max_ses2[1:12,], melt_max_nohypo_2[1:23,]) 
+mean_test<- rbind(melt_mean_ses1[173:215,], melt_mean_nohypo_1[81:100,], melt_mean_ses2[49:60,], melt_mean_nohypo_2[93:115,], melt_mean_ses1[130:172,], melt_mean_nohypo_1[61:80,], melt_mean_ses2[37:48,], melt_mean_nohypo_2[70:92,], melt_mean_ses1[87:129,], melt_mean_nohypo_1[41:60,], melt_mean_ses2[25:36,], melt_mean_nohypo_2[47:69,], melt_mean_ses1[44:86,], melt_mean_nohypo_1[21:40,], melt_mean_ses2[13:24,], melt_mean_nohypo_2[24:46,],melt_mean_ses1[1:43,], melt_mean_nohypo_1[1:20,], melt_mean_ses2[1:12,], melt_mean_nohypo_2[1:23,]) 
+
+```
+##prepare data for the glm of qualitative analysis
+
+#redefine datapath
+```{r, echo=FALSE, warning=FALSE, include=FALSE}
+data_path <- c("S:/AG/AG-CSB_NeuroRad2/khalila/MULTIBAND/multiband_data_last")
+#PATIENTS WITH HYPOPERFUSION IN SESSION 1
+#calculated as above
+
+#make a DVARS vector with segments name to be concatenated later 
+dvars_mean_all_ses1 <- c(segments)
+dvars_max_all_ses1<- c(segments)
+
+#define two for loops with first one looping through subjects and second one through segments
+for (i in 1:length(subjects)) {
+mean_seg_ses1_dvars <- c()
+max_seg_ses1_dvars<- c()
+
+      for (x in segments) {
+        #load dvars files from each segment
+        #these are text files showing the framewise displacement of the data, corresponding to the temporal derivative of movement parameters
+      x_i_dvars.txt<- read.csv(paste(data_path,subjects[i], "session_1", x, "dvars.txt", sep="/"), sep=";")
+      nam_mean_x_dvars<- paste(subjects[i], x,"mean", "dvars", sep="_")
+    #assign head motion mean dvars to a variable in the for loop
+    assign(nam_mean_x_dvars, mean(x_i_dvars.txt[,1]))
+    #assign head motion max to a variable 
+    nam_max_x_dvars<- paste(subjects[i], x, "max", "dvars", sep="_")
+    assign(nam_max_x_dvars, max(x_i_dvars.txt[,1]))
+    #concatenate mean and max values of each segment by rbind for one subject
+    mean_seg_ses1_dvars<- rbind(mean_seg_ses1_dvars, get(nam_mean_x_dvars))
+    max_seg_ses1_dvars<-rbind(max_seg_ses1_dvars, get(nam_max_x_dvars))
+      }
+  #define it as dataframe for one subject with 5 obs. of 1 variable  
+  mean_seg_ses1_dvars <- data.frame(mean_seg_ses1_dvars)
+  #give a column name corresponding to the name of that subject
+  colnames(mean_seg_ses1_dvars) <- subjects[i]
+  #do a cbind with the vector defined before the loop, giving rownames
+  dvars_mean_all_ses1 <- cbind(dvars_mean_all_ses1, mean_seg_ses1_dvars)
+  #same process applies to head motion max
+  max_seg_ses1_dvars<- data.frame(max_seg_ses1_dvars)
+  colnames(max_seg_ses1_dvars) <- subjects[i]
+ dvars_max_all_ses1<-cbind(dvars_max_all_ses1, max_seg_ses1_dvars)
+ 
+
+}
+
+#PATIENTS WITH HYPOPERFUSION IN SESSION 1 AND 2
+#pull the data consisting of subject names
+#this is factor vector of 12 levels
+subjects_2<-read.csv(paste(data_path, "new_day1_2", sep="/"),sep=";",header=F)$V1
+#define two vectors with segment names
+dvars_max_all_ses2<- c(segments)
+dvars_mean_all_ses2<- c(segments)
+#make two for loops one for subject smaller one for segments
+for (i in 1:length(subjects_2)) {
+mean_seg_ses2_dvars<- c()
+max_seg_ses2_dvars<- c()
+
+   
+    for (z in segments){
+        z_i_dvars.txt<- read.csv(paste(data_path, subjects_2[i], "session_2", z, "dvars.txt", sep="/"))
+        #assign the head motion mean to a variable
+        nam_mean_z_dvars<- paste(subjects_2[i], z, "mean","dvars", sep="_")
+        assign(nam_mean_z_dvars, mean(z_i_dvars.txt[,1]))
+        #head motion max to a variable
+        nam_max_z_dvars<- paste(subjects_2[i], z, "max", "dvars", sep="_")
+        assign(nam_max_z_dvars, max(z_i_dvars.txt[,1]))
+        #concetenate empty vectors
+    mean_seg_ses2_dvars<- rbind(mean_seg_ses2_dvars, get(nam_mean_z_dvars))
+    max_seg_ses2_dvars<-rbind(max_seg_ses2_dvars, get(nam_max_z_dvars))
+        }
+  
+mean_seg_ses2_dvars<-data.frame(mean_seg_ses2_dvars) 
+  colnames(mean_seg_ses2_dvars) <- subjects_2[i]
+ dvars_mean_all_ses2 <- cbind(dvars_mean_all_ses2, mean_seg_ses2_dvars)
+  max_seg_ses2_dvars<- data.frame(max_seg_ses2_dvars)
+  colnames(max_seg_ses2_dvars) <- subjects_2[i]
+  dvars_max_all_ses2<- cbind(dvars_max_all_ses2, max_seg_ses2_dvars)
+
+}
+
+#add a vector to volumes_output dataframe consisting of thresholds applied
+
+volumes_output$thr<-gsub('.*(46).*', '46', volumes_output$Mask)
+volumes_output$thr<-gsub('.*(23).*', '23', volumes_output$thr)
+volumes_output$thr<-gsub('.*(0).*', '0', volumes_output$thr)
+volumes_output$thr<- as.factor(volumes_output$thr)
+
+
+
+#dvars_mean/max_all_ses1/ses2 are data frames with segments being colnames, they need to be transposed for further analysis
+#First columns are got rid of and and the data frames are transposed. Outcomes are then rbinded inn a way where ses1 is above ses2 for mean and max data separately
+
+trans_mean_ses1_dvars<-as.data.frame(t(dvars_mean_all_ses1[,-1]))
+trans_mean_ses2_dvars<-as.data.frame(t(dvars_mean_all_ses2[,-1]))
+trans_max_ses1_dvars<- as.data.frame(t(dvars_max_all_ses1[,-1]))
+trans_max_ses2_dvars<-as.data.frame(t(dvars_max_all_ses2[,-1]))
+trans_mean_ses12_dvars<-rbind(as.data.frame(t(dvars_mean_all_ses1[,-1])),as.data.frame(t(dvars_mean_all_ses2[,-1])))
+trans_max_ses12_dvars<-rbind(as.data.frame(t(dvars_max_all_ses1[,-1])),as.data.frame(t(dvars_max_all_ses2[,-1])))
+
+#colnames for trans
+colnames(trans_mean_ses1_dvars)<- c("RS_A", "RS_B", "RS_C", "RS_D", "RS_E")
+colnames(trans_mean_ses2_dvars)<- c("RS_A", "RS_B", "RS_C", "RS_D", "RS_E")
+colnames(trans_max_ses1_dvars)<- c("RS_A", "RS_B", "RS_C", "RS_D", "RS_E")
+colnames(trans_max_ses2_dvars)<- c("RS_A", "RS_B", "RS_C", "RS_D", "RS_E")
+
+
+#boxplot head motion mean and max data (ses 1 and 2) across segments 
+boxplot(trans_mean_ses12_dvars, names = c("0.2 scan", "0.4 scan", "0.6 scan", "0.8 scan", "full scan"), ylab="Head Motion Mean DVARS")
+boxplot(trans_max_ses12_dvars, names = c("0.2 scan", "0.4 scan", "0.6 scan", "0.8 scan", "full scan"), ylab="Head Motion Max DVARS ")
+
+
+#reshape the data with melt function and assign column names
+colname<- c("segments", "subject", "value")
+for (i in c("mean", "max")) {
+  for (x in c("ses1", "ses2")) {
+    nam_melt_dvars<- paste("melt","segm", i, x, "dvars", sep="_" )
+  nam_dvars<- paste("dvars", i,"all", x, sep="_" )
+ assign(nam_melt_dvars, melt(get(nam_dvars)))
+ #for adding the same column name in a for loop you need another variable which the initial variable assigned to with get function 
+ get_nam_melt_dvars<-get(nam_melt_dvars)
+colnames(get_nam_melt_dvars)<- colname
+assign(nam_melt_dvars,get_nam_melt_dvars)
+ }
+}
+
+#rbind two melted dataframes of different sessions based on them being mean or max values
+melt_segm_mean_ses12_dvars<- rbind(melt_segm_mean_ses1_dvars, melt_segm_mean_ses2_dvars)
+melt_segm_max_ses12_dvars<- rbind(melt_segm_max_ses1_dvars, melt_segm_max_ses2_dvars)
+
+# make the dataframe for lmer with volumetry
+#first multiply the melted dataframes by there as you have three thresholds at volume data giving different outputs for each threshold
+melt_max_ses12_expanded_dvars<- melt_segm_max_ses12_dvars[rep(1:nrow(melt_segm_max_ses12_dvars),each=3), 1:3]
+melt_mean_ses12_expanded_dvars<- melt_segm_mean_ses12_dvars[rep(1:nrow(melt_segm_mean_ses12_dvars),each=3), 1:3]
+#make the segments vector as character so that after cbinding this does not return numbers instead of strings
+melt_max_ses12_expanded_dvars$segments<-as.character(melt_max_ses12_expanded_dvars$segments)
+
+#make the dataframe consisting of vectors either from volumes_output or expended melt dataframes
+lmer.df_dvars<-data.frame(volumes_output$Subject, melt_max_ses12_expanded_dvars$segments, volumes_output$Day,melt_mean_ses12_expanded$value, melt_max_ses12_expanded$value, melt_mean_ses12_expanded_dvars$value, melt_max_ses12_expanded_dvars$value, volumes_output$thr,   volumes_output$Volume, stringsAsFactors = FALSE)
+colnames(lmer.df_dvars)<- c("subject", "segment", "session", "hm_mean", "hm_max","hm_mean_dvars", "hm_max_dvars", "thr", "volume")
+#convert segments column from character to factor
+lmer.df_dvars$segment<-as.factor(lmer.df_dvars$segment)
+
+
+
+##PATIENTS WITH NO HYPOPERFUSION IN SESSION 1 AND 2
+#pul subjects name assign it to a variable
+subs_nohypo_1<-read.csv(paste(data_path, "subs_nohypo_ses1", sep="/"),header=F)$V1
+subs_nohypo_2<- read.csv(paste(data_path, "subs_nohypo_ses2", sep="/"),header=F)$V1
+#make vectors that are composed of segments name with two for loops
+for (i in c("mean", "max")) {
+  for (x in c("ses1", "ses2")) {
+    nam_nohypo<- paste("dvars", i, "nohypo", x, sep="_")
+    assign(nam_nohypo, segments)
+    }
+}
+
+for (i in 1:length(subs_nohypo_1)) {
+mean_seg_nohp_ses1_dvars <- c()
+max_seg_nohp_ses1_dvars<- c()
+
+
+
+      for (z in segments) {
+        #read dvars files first for session_1
+      z_i_dvars.txt<- read.csv(paste(data_path,subs_nohypo_1[i], "session_1", z, "dvars.txt", sep="/"))
+      nam_mean_z_dvars<- paste(subs_nohypo_1[i], x,"mean","dvars", sep="_")
+      #assign mean and max values to variables and rbind them with the empty vectors defined after the first for loop
+      assign(nam_mean_z_dvars, mean(z_i_dvars.txt[,1]))
+      nam_max_z_dvars<- paste(subs_nohypo_1[i], x, "max","dvars", sep="_")
+    assign(nam_max_z_dvars, max(z_i_dvars.txt[,1]))
+    mean_seg_nohp_ses1_dvars<- rbind(mean_seg_nohp_ses1_dvars, get(nam_mean_z_dvars))
+    max_seg_nohp_ses1_dvars<-rbind(max_seg_nohp_ses1_dvars, get(nam_max_z_dvars))
+      }
+ #make data frames for mean and max data at ses1 with no hypoperfusion
+  mean_seg_nohp_ses1_dvars <- data.frame(mean_seg_nohp_ses1_dvars)
+  #give one volumn the name of the subject
+  colnames(mean_seg_nohp_ses1_dvars) <- subs_nohypo_1[i]
+  #cbind them with the vectors with the names of segments
+  dvars_mean_nohypo_ses1 <- cbind(dvars_mean_nohypo_ses1, mean_seg_nohp_ses1_dvars)
+ max_seg_nohp_ses1_dvars<- data.frame(max_seg_nohp_ses1_dvars)
+  colnames(max_seg_nohp_ses1_dvars) <- subs_nohypo_1[i]
+ dvars_max_nohypo_ses1<-cbind(dvars_max_nohypo_ses1, max_seg_nohp_ses1_dvars)
+    
+}
+      
+  for (i in 1:length(subs_nohypo_2)){
+    mean_seg_nohp_ses2_dvars<- c()
+    max_seg_nohp_ses2_dvars<- c()
+    
+    for(t in segments){
+        #read dvars files for session_2 and do same thing for head motion mean and max calculation
+        t_i_dvars.txt<- read.csv(paste(data_path, subs_nohypo_2[i], "session_2", t, "dvars.txt", sep="/"))
+        nam_mean_t_dvars<- paste(subs_nohypo_2[i], t, "mean","dvars", sep="_")
+        assign(nam_mean_t_dvars, mean(t_i_dvars.txt[,1]))
+        nam_max_t_dvars<- paste(subs_nohypo_2[i], t, "max","dvars", sep="_")
+        assign(nam_max_t_dvars, max(t_i_dvars.txt[,1]))
+    mean_seg_nohp_ses2_dvars<- rbind(mean_seg_nohp_ses2_dvars, get(nam_mean_t_dvars))
+    max_seg_nohp_ses2_dvars<-rbind(max_seg_nohp_ses2_dvars, get(nam_max_t_dvars))
+    }
+    
+    mean_seg_nohp_ses2_dvars<-data.frame(mean_seg_nohp_ses2_dvars) 
+  colnames(mean_seg_nohp_ses2_dvars) <- subs_nohypo_1[i]
+dvars_mean_nohypo_ses2 <- cbind(dvars_mean_nohypo_ses2, mean_seg_nohp_ses2_dvars)
+max_seg_nohp_ses2_dvars<- data.frame(max_seg_nohp_ses2_dvars)
+  colnames(max_seg_nohp_ses2_dvars) <- subs_nohypo_1[i]
+  dvars_max_nohypo_ses2<- cbind(dvars_max_nohypo_ses2, max_seg_nohp_ses2_dvars)
+  }
+  
+
+ 
+ #get rid of the first column and give rownames as segment name to dataframes
+for (i in c("mean", "max")) {
+  for (x in c("ses1", "ses2")) {
+  x_i_nohypo<- paste("dvars", i, "nohypo",x, sep="_")
+  t<- get(x_i_nohypo)[,-1]
+  rownames(t)<- segments
+  assign(x_i_nohypo,t)
+  }
+}
+ 
+#command above gives the output of dataframes  with 5 observations and 23 variables
+#after transposing we have segments as colnames
+dvars_mean_nohypo_final_1<- as.data.frame(t(dvars_mean_nohypo_ses1))
+dvars_max_nohypo_final_1<- as.data.frame(t(dvars_max_nohypo_ses1))
+dvars_mean_nohypo_final_2<- as.data.frame(t(dvars_mean_nohypo_ses2))
+dvars_max_nohypo_final_2<- as.data.frame(t(dvars_max_nohypo_ses2))
+
+
+#reshape the nohypoperfusion data with melt function
+for (i in c("mean", "max")) {
+  for (x in c("1", "2")) {
+    
+    nohypo_melt<- paste("melt", i, "nohypo", x, "dvars", sep="_")
+    nohypo_melt_test<- paste("dvars", i, "nohypo", "final", x, sep="_")
+    assign(nohypo_melt, melt(get(nohypo_melt_test)))
+  }
+ 
+  #reshape transposed with hypoperfusion data for the creation of the data frame for qualitative analysis mixed model, since there we need segments to be ordered as a bigger frame and subjects based on that
+  #but in volume data segments were ordered for each subject
+  for (z in c("ses1", "ses2")) {
+    
+    trans_withhypo_dvars<- paste("trans", i,z, "dvars", sep="_")
+    melt_trans_dvars<- paste("melt", i, z,"dvars", sep="_")
+    assign(melt_trans_dvars, melt(get(trans_withhypo_dvars)))
+  }
+
+}
+
+#had to subset data based on row numbers in order to adjust them to the excel sheet used by raters(excel sheet was organized in a way explained above)
+max_test_dvars<- rbind(melt_max_ses1_dvars[173:215,], melt_max_nohypo_1_dvars[81:100,], melt_max_ses2_dvars[49:60,], melt_max_nohypo_2_dvars[93:115,], melt_max_ses1_dvars[130:172,], melt_max_nohypo_1_dvars[61:80,], melt_max_ses2_dvars[37:48,], melt_max_nohypo_2_dvars[70:92,], melt_max_ses1_dvars[87:129,], melt_max_nohypo_1_dvars[41:60,], melt_max_ses2_dvars[25:36,], melt_max_nohypo_2_dvars[47:69,], melt_max_ses1_dvars[44:86,], melt_max_nohypo_1_dvars[21:40,], melt_max_ses2_dvars[13:24,], melt_max_nohypo_2_dvars[24:46,],melt_max_ses1_dvars[1:43,], melt_max_nohypo_1_dvars[1:20,], melt_max_ses2_dvars[1:12,], melt_max_nohypo_2_dvars[1:23,]) 
+mean_test_dvars<- rbind(melt_mean_ses1_dvars[173:215,], melt_mean_nohypo_1_dvars[81:100,], melt_mean_ses2_dvars[49:60,], melt_mean_nohypo_2_dvars[93:115,], melt_mean_ses1_dvars[130:172,], melt_mean_nohypo_1_dvars[61:80,], melt_mean_ses2_dvars[37:48,], melt_mean_nohypo_2_dvars[70:92,], melt_mean_ses1_dvars[87:129,], melt_mean_nohypo_1_dvars[41:60,], melt_mean_ses2_dvars[25:36,], melt_mean_nohypo_2_dvars[47:69,], melt_mean_ses1_dvars[44:86,], melt_mean_nohypo_1_dvars[21:40,], melt_mean_ses2_dvars[13:24,], melt_mean_nohypo_2_dvars[24:46,],melt_mean_ses1_dvars[1:43,], melt_mean_nohypo_1_dvars[1:20,], melt_mean_ses2_dvars[1:12,], melt_mean_nohypo_2_dvars[1:23,]) 
+```
+
+##prepare data for glm 
+```{r, echo=FALSE, warning=FALSE}
+# define datapath again
+data_path <- c("S:/AG/AG-CSB_NeuroRad2/khalila/MULTIBAND/multiband_data_last/R_project/R_github")
+#pull .csv data with both raters' interpretability analysis for each segment. Uninterpretables left as NA and N are put in separate columns
+glmer_qualitative <- read.csv(paste(data_path, "glmer_qualitative_x.csv",sep="/"), sep=";", na.strings = c(""))
+#rater 1's evaluation of segments(noise, structure clarity, interpretability included, comments are left out)
+kv_tsa_rating<- read.csv(paste(data_path, "KV_tsa_rating.csv",sep="/"),colClasses = c("factor", "factor", "factor", "factor", "factor", "factor", "factor"), sep= ";")[,-(7:8)]
+#rater 2's evaluation
+ig_tsa_rating<-read.csv(paste(data_path, "IG_tsa_rating.csv",sep="/"),colClasses = c("factor", "factor", "factor", "factor", "factor", "factor", "factor"), sep= ";")[,-(7:8)]
+#replace NA values with "U" for the hypoperfusion vector
+levels(kv_tsa_rating$hypoperfusion.Y.N.)[1]<-"U"
+levels(kv_tsa_rating$hypoperfusion.Y.N.)[2]<-"U"
+levels(ig_tsa_rating$hypoperfusion.Y.N.)[1]<- "U"
+#rearrange the levels of raters' evaluation sheets
+levels(kv_tsa_rating$corresponds.to.DWI..Y.N.)[1]<- "U"
+#there were two empty type of cells to be assigned to "U"
+levels(kv_tsa_rating$corresponds.to.DWI..Y.N.)[2]<- "U"
+levels(ig_tsa_rating$corresponds.to.DWI..Y.N.)[1]<- "U"
+levels(ig_tsa_rating$uninterpretable.Y.N.)[2]<- "y" #since rater 1 named it as "x" 
+levels(kv_tsa_rating$uninterpretable.Y.N.)[2]<-""
+                     
+
+#include head motion mean and max as well as  rater 1's interpretability, noise and structure clarity evaluation in a dataframe
+glmer.qual.df_dvars<- cbind(glmer_qualitative[,1:2], mean_test[,1:2], max_test[,2],mean_test_dvars[,2], max_test_dvars[,2], glmer_qualitative[,3], glmer_qualitative[,4], kv_tsa_rating$NOISE.1.3., kv_tsa_rating$structure.clarity.1.3...3.good..1.not.identifiable, kv_tsa_rating$hypoperfusion.Y.N.)
+#give colnames
+colnames(glmer.qual.df_dvars)<- c("subject", "session", "segment", "hm_mean", "hm_max","hm_mean_dvars", "hm_max_dvars","qualitative", "uninterpretable", "noise", "structure_clarity", "hypoperf")
+#put both raters'interpretability evaluations together 
+#rbind the data frame with itself
+rbind_glmer_qual_df_dvars<- rbind(glmer.qual.df_dvars, glmer.qual.df_dvars)
+#add rater 2's interpretability evaluation under rater 1
+rbind_glmer_qual_df_dvars[491:980,9]<- glmer_qualitative$i_unint
+#add rater 2's noise evaluation
+rbind_glmer_qual_df_dvars[491:980,10]<- ig_tsa_rating[1:490,2]
+#structure clarity evaluation
+rbind_glmer_qual_df_dvars[491:980,11]<- ig_tsa_rating[1:490,3]
+#hypoperfsuion detection 
+rbind_glmer_qual_df_dvars[491:980,12]<- ig_tsa_rating[1:490,4]
+#make a new column consisting of the raters' names' first letter
+rbind_glmer_qual_df_dvars$raters<- c("K")
+rbind_glmer_qual_df_dvars[491:980,13]<- c("I")
+#define that column as factor
+rbind_glmer_qual_df_dvars$raters<-as.factor(rbind_glmer_qual_df_dvars$raters)
+#define session as factor
+rbind_glmer_qual_df_dvars$session<-as.factor(rbind_glmer_qual_df_dvars$session)
+#make another variable with uninterpretable converted to "n"
+rbind_glmer_qual_df_dvars$hypoper_without_u<-rbind_glmer_qual_df_dvars$hypoperf
+levels(rbind_glmer_qual_df_dvars$hypoper_without_u)[rbind_glmer_qual_df_dvars$hypoper_without_u=="U"]<- "n"
+#load the sensitivity specifity sheet for the mixed model
+sen_spe_raters<-read.csv(paste(data_path, "spe_sen_raters.csv", sep="/" 
+), sep=";")
+
+```
+
+
+##descriptive stats before models
+```{r, echo=FALSE, warning=FALSE}
+#descriptive stats for differen data sets used in these models
+list(Hmisc::describe(lmer.df_dvars[,c(-1,-4,-5,-7,-8)]), psych::describe(lmer.df_dvars[,c(4,5,7)], fast=TRUE))
+list(Hmisc::describe(rbind_glmer_qual_df_dvars[,c(6,7,8,9,10)]), psych::describe(rbind_glmer_qual_df_dvars[,c(4,5)], fast=TRUE))
+Hmisc::describe(sen_spe_raters[sen_spe_raters$sens_spe== "sensitivity",]$values, fast=TRUE)
+Hmisc::describe(sen_spe_raters[sen_spe_raters$sens_spe== "specificity",]$values, fast=TRUE)
+
+```
+## lineer regression model for volumetry analysis
+## comparison of models with and without random effect and interaction
+## differences were significant but random model was used as recommended by the statistician
+```{r, echo=FALSE, warning=FALSE, fig.height=8, fig.width=10}
+
+#RELEVEL THE FACTOR COLUMNS FOR BOTH VOLUMETRY AND QUALITATIVE
+
+#full scan ref in volumetry analysis
+lmer.df_dvars$segment<- relevel(lmer.df_dvars$segment, ref="RS_E")
+#follow up scans as ref
+lmer.df_dvars$session<- relevel(lmer.df_dvars$session, ref="D1")
+# full scan ref in qualitative analysis
+rbind_glmer_qual_df_dvars$segment<- relevel(rbind_glmer_qual_df_dvars$segment, ref="RS_E")
+#yes as hypoperfusion reference
+rbind_glmer_qual_df_dvars$hypoperf<- relevel(rbind_glmer_qual_df_dvars$hypoperf, ref=("y"))
+#follow up scans as ref
+rbind_glmer_qual_df_dvars$session<- relevel(rbind_glmer_qual_df_dvars$session, ref="1")
+#uninterpretable evaluations as ref
+rbind_glmer_qual_df_dvars$uninterpretable<- relevel(rbind_glmer_qual_df_dvars$uninterpretable, ref="U")
+#rater 2 as ref
+rbind_glmer_qual_df_dvars$raters<- relevel(rbind_glmer_qual_df_dvars$raters, ref="K")
+#"n" as ref in hypopperf_without_u
+rbind_glmer_qual_df_dvars$hypoper_without_u<- relevel(rbind_glmer_qual_df_dvars$hypoper_without_u, ref="n")
+#full scan as reference in sensitivity specificity analysis
+sen_spe_raters$RATERS<- relevel(sen_spe_raters$RATERS, ref="K")
+sen_spe_raters$SEGMENTS<- relevel(sen_spe_raters$SEGMENTS, ref="E")
+#set the order of the ordinal factors for ordinal mixed model
+rbind_glmer_qual_df_dvars$noise<- ordered(rbind_glmer_qual_df_dvars$noise, levels=c("1", "2", "3"))
+rbind_glmer_qual_df_dvars$structure_clarity<- ordered(rbind_glmer_qual_df_dvars$structure_clarity, levels=c("1", "2", "3"))
+
+
+
+#linear mixed model on volumetry data
+#as it is a numeric dependent variable, glmer is not needed.
+#using lmer for checking the p value with lmerTest with/out slopes included, intercept is to be added because when model with intercept compared to model without difference is significan 
+#log transformation of volume as suggested by the statistician
+lmer.df_dvars$log_volume<-log(lmer.df_dvars$volume)
+#transformation of inf numbers to NA, as INF numbers cannot be omitted by lmer
+lmer.df_dvars$log_volume[which(lmer.df_dvars$log_volume== -Inf)]=NA
+lmer.df_dvars$log_volume[which(is.nan(lmer.df_dvars$log_volume))]=NA
+
+#as the interaction between head motion mean and max values makes the interpretation harder, separate models were set for each
+options(na.action="na.exclude")
+#used interaction and slope models separately and checked for their best fit using lrtest(rpackage lmtest)
+lmer_random_log_mean_dvars<-lmer(log_volume ~ segment+hm_mean+session+thr+hm_mean_dvars + (1+segment| subject), data=lmer.df_dvars)
+
+```
+
+
+```{r,fig.height=8, fig.width=10}
+#do another random model for head motion max
+lmer_random_log_max_dvars<-lmer(log_volume ~ segment+hm_max+session +thr+ hm_max_dvars+(1+segment| subject), data=lmer.df_dvars)
+
+summary(lmer_random_log_mean_dvars)#random intercept levels included
+summary(lmer_random_log_max_dvars) # random intercept levels included 
+
+# checking for r square with MuMin
+
+print(r.squaredGLMM(lmer_random_log_max_dvars))
+print(r.squaredGLMM(lmer_random_log_mean_dvars))
+
+
+```
+
+
+#multiplot linear mixed model
+```{r, echo=FALSE, warning=FALSE, fig.height=8, fig.width=10}
+# rescaled hm_mean and max, lmer plot
+ten<-c(10)
+
+lmer.df_dvars$hm_mean_ten<-lmer.df_dvars$hm_mean*ten
+lmer_random_log_mean_ten_dvars<-lmer(log_volume ~ segment+hm_mean_ten+session+thr+hm_mean_dvars + (1+segment| subject), data=lmer.df_dvars)
+lmer.df_dvars$hm_max_ten<-lmer.df_dvars$hm_max*ten
+lmer_random_log_max_ten_dvars<- lmer(log_volume ~ segment+hm_max_ten+session+thr +hm_max_dvars+ (1+segment| subject), data=lmer.df_dvars)
+
+#arrange the name of the coefficients data frame of the summary output of two models
+#assign the summary to variables
+sum_lmer_max_ten_dvars<- summary(lmer_random_log_max_ten_dvars)
+sum_lmer_mean_ten_dvars<- summary(lmer_random_log_mean_ten_dvars)
+#rename the rownames
+rownames(sum_lmer_max_ten_dvars$coefficients)<-c( "Intercept", "0.2 scan", "0.4 scan", "0.6 scan", "0.8 scan", "FD max", "follow up scan", "THR >2.3 s", "THR >4.6 s", "DVARS max")
+rownames(sum_lmer_mean_ten_dvars$coefficients)<-c( "Intercept", "0.2 scan", "0.4 scan", "0.6 scan", "0.8 scan", "FD mean", "Follow up scan", "THR >2.3 s", "THR >4.6 s", "DVARS mean")
+#multiplot the summary variables
+mean_max_volume_multi_ten_dvars<-multiplot(sum_lmer_max_ten_dvars,sum_lmer_mean_ten_dvars, dodgeHeight = 0.5,zeroColor = "#636363", pointSize = 5, shape=16, innerCI =2, outerCI = 2,lwdInner = 1.2, 
+          lwdOuter = 0.5, sort="natural",title="", xlab="Beta coefficient", ylab="Fixed effects",coefficients = c("FD mean", "FD max", "DVARS mean", "DVARS max", "0.2 scan", "0.4 scan", "0.6 scan", "0.8 scan" ))+
+    theme_tufte_revised(base_size = 30, base_family = "sans")+scale_color_manual(labels = c("Head motion max", "Head motion mean"), values = c("#5e3c99",  "#e66101"), name="")+
+    theme(legend.position = "bottom")+theme(axis.title.x = element_text(size=25, hjust=0.5))+annotate(geom="text", label= "R2c=0.75, R2m= 0.23", x=1.5 , y=5.5, color="#5e3c99",size=5)+ 
+    annotate(geom="text", label= "R2c=0.79, R2m= 0.28", x=1.5, y=5, color= "#e66101", size=5)+theme(axis.title.y = element_text(size=23, hjust=0.5, vjust=0.3))+xlim(-1,2)
+
+ggsave("mean_max_volume_multi_ten_dvars.pdf", mean_max_volume_multi_ten_dvars, width = 25, height = 20, units = "cm", dpi = 500)
+
+ggsave("mean_max_volume_multi_ten_dvars.png", mean_max_volume_multi_ten_dvars, width = 25, height = 20, units = "cm", dpi = 500)
+
+ggsave("mean_max_volume_multi_ten_dvars.tiff", mean_max_volume_multi_ten_dvars, width = 25, height = 20, units = "cm", compression = "lzw")
+
+
+
+
+
+
+```
+##check the assumptions of lmer
+## fitted values against residuals,homogeneity, normality
+
+```{r, echo=FALSE, warning=FALSE, fig.height=8, fig.width=10}
+
+# plot  the fitted values against residuals and this is the most important assumption that has to be met
+par(mfrow=c(2,2))
+plot(lmer_random_log_mean_dvars)
+plot(lmer_random_log_max_dvars) 
+#there should not be an obvious trend
+
+#check the homogenity, plot should like a starry night
+plot(resid(lmer_random_log_mean_dvars))
+plot(resid(lmer_random_log_max_dvars))
+
+#chek the normality of the variance, normally plotting the residuals against continus covariate will be enough
+qqmath(lmer_random_log_mean_dvars, id=0.005) #looks like fit got better with logaritmic transformation, anova comparison cannot be executed between models with and without log transformation
+qqmath(lmer_random_log_max_dvars, id=0.005)
+```
+
+## generalized linear mixed effects on interpretability 
+## comparison of models with hm mean and max with each other
+## effects plot on hm mean model
+```{r, echo=FALSE, warning=FALSE, fig.height=8, fig.width=10}
+#uninterpretablitiy analysis including raters, segments and head motion values (mean and max separately)
+#we did neither random nor interaction model as it does not converge with glmer then 
+#glmer is used as the dependent variable is binomial
+gm_qual_mean_raters_dvars<- glmer(uninterpretable ~ hm_mean+segment+raters+session+hm_mean_dvars+(1| subject), data=rbind_glmer_qual_df_dvars, family=binomial, nAGQ =15) #nAGQ is meant to increase the fixed points for improving the estimate 
+gm_qual_max_raters_dvars<- glmer(uninterpretable ~ hm_max+segment+raters + session+ hm_max_dvars+(1| subject), data=rbind_glmer_qual_df_dvars, family=binomial, nAGQ =15)
+
+summary(gm_qual_mean_raters_dvars)
+summary(gm_qual_max_raters_dvars)
+
+
+```
+
+## generalized mixed model on hypoperfusion detection for comparing sensitivity across segments
+```{r, echo=FALSE, warning=FALSE, fig.height=8, fig.width=10}
+glmer_hypoperf_no_unint_mean_dvars<- glmer(hypoper_without_u ~ hm_mean+segment+raters+session+hm_mean_dvars+(1| subject), data=rbind_glmer_qual_df_dvars, family=binomial)
+glmer_hypoperf_no_unint_max_dvars<-glmer(hypoper_without_u ~ hm_max+segment+raters+session+hm_max_dvars+(1| subject), data=rbind_glmer_qual_df_dvars, family=binomial)
+
+summary(glmer_hypoperf_no_unint_mean_dvars)
+summary(glmer_hypoperf_no_unint_max_dvars)
+
+
+cc_sensitivity_mean_dvars<- confint(glmer_hypoperf_no_unint_mean_dvars, parm="beta_", method="Wald")
+or_sensitivity_mean_dvars <- exp(cbind(est=fixef(glmer_hypoperf_no_unint_mean_dvars),cc_sensitivity_mean_dvars))
+print("odds ratio for sensitivity to hypoperfusion detection HM mean with dvars added")
+print(or_sensitivity_mean_dvars)
+
+
+
+
+
+```
+
+
+## ordinal mixed model on noise and structure clarity assesments of raters
+```{r, echo=FALSE, warning=FALSE, fig.height=8, fig.width=10}
+#noise, structure clarity analysis using clmm function(package ordinal) since they are ordinal data
+#clmm2 function was also tried but it does not provide intercept
+# RESCALED ORDINAL MIXED MODELS FOR STRUCTURE CLARITY AND NOISE
+    #rescale mean and max HM values
+    ten<-c(10)
+    rbind_glmer_qual_df_dvars$hm_mean_mltp_ten<-rbind_glmer_qual_df_dvars$hm_mean*ten
+rbind_glmer_qual_df_dvars$hm_max_mltp_ten<- rbind_glmer_qual_df_dvars$hm_max*ten
+
+
+# Building mixed models with rescaled predictors
+    # NOISE
+clmm_noise_mean_ten_dvars<- clmm(noise~ session+segment+hm_mean_mltp_ten+raters+hm_mean_dvars+(1|subject),data=rbind_glmer_qual_df_dvars, Hess = T)
+summary(clmm_noise_mean_ten_dvars)
+clmm_noise_mean_ten_dvars$coefficients
+clmm_noise_max_ten_dvars<- clmm(noise~ session+segment+hm_max_mltp_ten+hm_max_dvars+raters+(1|subject),data=rbind_glmer_qual_df_dvars, Hess = T)
+
+    # STRUCTURE CLARITY
+clmm_sc_mean_ten_dvars<- clmm(structure_clarity~ session+segment+hm_mean_mltp_ten+raters+hm_mean_dvars+(1|subject),data=rbind_glmer_qual_df_dvars)
+
+clmm_sc_max_ten_dvars<- clmm(structure_clarity~ session+segment+hm_max_mltp_ten+raters+hm_max_dvars+(1|subject),data=rbind_glmer_qual_df_dvars)
+
+    # INTERPRETABILITY
+gm_qual_mean_ten_dvars<- glmer(uninterpretable ~ hm_mean_mltp_ten+segment+raters+session+hm_mean_dvars+ (1| subject), data=rbind_glmer_qual_df_dvars, family=binomial, nAGQ =17)
+gm_qual_max_ten_dvars<- glmer(uninterpretable ~ hm_max_mltp_ten+segment+raters+session+hm_max_dvars+ (1| subject), data=rbind_glmer_qual_df_dvars, family=binomial, nAGQ =17)
+
+
+```
+
+##multiplot ccm and glmer models to one plot 
+```{r, echo=FALSE, warning=FALSE, fig.height=8, fig.width=10}
+
+#odds ratio for segmentsRS_A
+or_rsa<-exp(clmm_noise_mean_ten_dvars$coefficients[4])
+#odds ratio for segmentsRS_B
+or_rsb<-exp(clmm_noise_mean_ten_dvars$coefficients[5])
+#odds ratio for segmentsRS_c
+or_rsc<-exp(clmm_noise_mean_ten_dvars$coefficients[6])
+#odds ratio for segmentsRS_D
+or_rsd<-exp(clmm_noise_mean_ten_dvars$coefficients[7])
+#odds ratio for hm_mean
+or_hm_mean<-exp(clmm_noise_mean_ten_dvars$coefficients[8])
+#odds ratio for raters
+or_raters<-exp(clmm_noise_mean_ten_dvars$coefficients[9])
+#odds ratio for hm mean dvars
+or_dvars<-exp(clmm_noise_mean_ten_dvars$coefficients[10])
+#confidence intervals for coefficients
+confi<-confint(clmm_noise_mean_ten_dvars)
+#lower confidence limit for odds ratio of segmentsRS_A
+lo_rsa<-exp(confi[4,1])
+#higher confidence limit for odds ratio of segmentsRS_A
+hi_rsa<-exp(confi[4,2])
+#lower confidence limit for odds ratio of segmentsRS_B
+lo_rsb<-exp(confi[5,1])
+#higher confidence limit for odds ratio of segmentsRS_B
+hi_rsb<-exp(confi[5,2])
+#lower confidence limit for odds ratio of segmentsRS_c
+lo_rsc<-exp(confi[6,1])
+#higher confidence limit for odds ratio of segmentsRS_c
+hi_rsc<-exp(confi[6,2])
+#lower confidence limit for odds ratio of segmentsRS_D
+lo_rsd<-exp(confi[7,1])
+#higher confidence limit for odds ratio of segmentsRS_D
+hi_rsd<-exp(confi[7,2])
+#lower confidence limit for odds ratio of hm_mean
+lo_hm_mean<-exp(confi[8,1])
+#higher confidence limit for odds ratio of hm_mean
+hi_hm_mean<-exp(confi[8,2])
+#lower confidence limit for odds ratio of raters
+lo_raters<-exp(confi[9,1])
+#higher confidence limit for odds ratio of raters
+hi_raters<-exp(confi[9,2])
+#lower confidence limit for odds ratio of dvars
+lo_dvars<-exp(confi[10,1])
+#higher confidence limit for odds ratio of dvars
+hi_dvars<-exp(confi[10,2])
+#labels
+boxLabels<-c("0.2 scan", "0.4 scan", "0.6 scan","0.8 scan", "FD mean", "reader 2", "DVARS mean")
+boxLabels<-factor(boxLabels, levels=c("0.2 scan", "0.4 scan", "0.6 scan","0.8 scan", "FD mean", "reader 2", "DVARS mean"))
+
+
+#odds ratio for segmentsRS_A
+or_rsa_sc<-exp(clmm_sc_mean_ten_dvars$coefficients[4])
+#odds ratio for segmentsRS_B
+or_rsb_sc<-exp(clmm_sc_mean_ten_dvars$coefficients[5])
+#odds ratio for segmentsRS_c
+or_rsc_sc<-exp(clmm_sc_mean_ten_dvars$coefficients[6])
+#odds ratio for segmentsRS_D
+#odds ratio for segmentsRS_D
+or_rsd_sc<-exp(clmm_sc_mean_ten_dvars$coefficients[7])
+#odds ratio for hm_mean
+or_hm_mean_sc<-exp(clmm_sc_mean_ten_dvars$coefficients[8])
+#odds ratio for raters
+or_raters_sc<-exp(clmm_sc_mean_ten_dvars$coefficients[9])
+#odds ratio for dvars
+or_dvars_sc<-exp(clmm_sc_mean_ten_dvars$coefficients[10])
+#confidence intervals for coefficients
+confi_sc<-confint(clmm_sc_mean_ten_dvars)
+#lower confidence limit for odds ratio of segmentsRS_A
+lo_rsa_sc<-exp(confi_sc[4,1])
+#higher confidence limit for odds ratio of segmentsRS_A
+hi_rsa_sc<-exp(confi_sc[4,2])
+#lower confidence limit for odds ratio of segmentsRS_B
+lo_rsb_sc<-exp(confi_sc[5,1])
+#higher confidence limit for odds ratio of segmentsRS_B
+hi_rsb_sc<-exp(confi_sc[5,2])
+#lower confidence limit for odds ratio of segmentsRS_c
+lo_rsc_sc<-exp(confi_sc[6,1])
+#higher confidence limit for odds ratio of segmentsRS_c
+hi_rsc_sc<-exp(confi_sc[6,2])
+#lower confidence limit for odds ratio of segmentsRS_D
+lo_rsd_sc<-exp(confi_sc[7,1])
+#higher confidence limit for odds ratio of segmentsRS_D
+hi_rsd_sc<-exp(confi_sc[7,2])
+#lower confidence limit for odds ratio of hm_mean
+lo_hm_mean_sc<-exp(confi_sc[8,1])
+#higher confidence limit for odds ratio of hm_mean
+hi_hm_mean_sc<-exp(confi_sc[8,2])
+#lower confidence limit for odds ratio of raters
+lo_raters_sc<-exp(confi_sc[9,1])
+#higher confidence limit for odds ratio of raters
+hi_raters_sc<-exp(confi_sc[9,2])
+#lower confidence limit for odds ratio of dvars
+lo_dvars_sc<-exp(confi_sc[10,1])
+#higher confidence limit for odds ratio of dvars
+hi_dvars_sc<-exp(confi_sc[10,2])
+
+
+
+#confidence intervals
+confi1<-confint(gm_qual_mean_ten_dvars, parm="beta_", method="Wald")
+#odds ratio for hm_mean
+or_hm_mean_gm<-exp(gm_qual_mean_ten_dvars@beta[2])
+#odds ratio for segmentRS_A
+or_rsa_gm<-exp(gm_qual_mean_ten_dvars@beta[3])
+#odds ratio for period3
+or_rsb_gm<-exp(gm_qual_mean_ten_dvars@beta[4])
+#odds ratio for period4
+or_rsc_gm<-exp(gm_qual_mean_ten_dvars@beta[5])
+#odds ratio for segmentRS_D
+or_rsd_gm<-exp(gm_qual_mean_ten_dvars@beta[6])
+#odds ratio for raters
+or_raters_gm<-exp(gm_qual_mean_ten_dvars@beta[7])
+#odds ratio for dvars
+or_dvars_gm<-exp(gm_qual_mean_ten_dvars@beta[9])
+#lower confidence limit for odds ratio of hm_mean
+lo_hm_mean_gm<-exp(confi1[2,1])
+#higher confidence limit for odds ratio of period2
+hi_hm_mean_gm<-exp(confi1[2,2])
+#lower confidence limit for odds ratio of segmentRS_A
+lo_rsa_gm<-exp(confi1[3,1])
+#higher confidence limit for odds ratio of segmentRS_A
+hi_rsa_gm<-exp(confi1[3,2])
+#lower confidence limit for odds ratio of segmentRS_B
+lo_rsb_gm<-exp(confi1[4,1])
+#higher confidence limit for odds ratio of segmentRS_B
+hi_rsb_gm<-exp(confi1[4,2])
+#lower confidence limit for odds ratio of segmentRS_C
+lo_rsc_gm<-exp(confi1[5,1])
+#higher confidence limit for odds ratio of segmentRS_C
+hi_rsc_gm<-exp(confi1[5,2])
+#lower confidence limit for odds ratio of segmentRS_D
+lo_rsd_gm<-exp(confi1[6,1])
+#higher confidence limit for odds ratio of segmentRS_D
+hi_rsd_gm<-exp(confi1[6,2])
+#lower confidence limit for odds ratio of raters
+lo_raters_gm<-exp(confi1[7,1])
+#higher confidence limit for odds ratio of raters
+hi_raters_gm<-exp(confi1[7,2])
+
+#lower confidence limit for odds ratio of dvars
+lo_dvars_gm<-exp(confi1[9,1])
+#higher confidence limit for odds ratio of dvars
+hi_dvars_gm<-exp(confi1[9,2])
+
+
+#dataframe for odds ratios
+dat<-data.frame(boxOdds=c(or_rsa,or_rsa_gm,or_rsa_sc, or_rsb,or_rsb_gm,or_rsb_sc,or_rsc,or_rsc_gm,or_rsc_sc, or_rsd,or_rsd_gm,or_rsd_sc, or_hm_mean,or_hm_mean_gm,or_hm_mean_sc, or_raters,or_raters_gm,
+                          or_raters_sc, or_dvars, or_dvars_gm, or_dvars_sc), 
+                boxCILow=c(lo_rsa,lo_rsa_gm,lo_rsa_sc, lo_rsb,lo_rsb_gm,lo_rsb_sc, lo_rsc,lo_rsc_gm,lo_rsc_sc, lo_rsd,lo_rsd_gm,lo_rsd_sc, lo_hm_mean,lo_hm_mean_gm,lo_hm_mean_sc,
+                           lo_raters,lo_raters_gm, lo_raters_sc, lo_dvars, lo_dvars_gm, lo_dvars_sc),
+                boxCIHig=c(hi_rsa,hi_rsa_gm,hi_rsa_sc, hi_rsb,hi_rsb_gm,hi_rsb_sc, hi_rsc,hi_rsc_gm,hi_rsc_sc, hi_rsd,hi_rsd_gm,hi_rsd_sc,hi_hm_mean,hi_hm_mean_gm,hi_hm_mean_sc, hi_raters, 
+                           hi_raters_gm, hi_raters_sc, hi_dvars, hi_dvars_gm, hi_dvars_sc) 
+                , ylabel=c(rep("0.2 scan",3), rep("0.4 scan",3), rep("0.6 scan",3), rep("0.8 scan",3), rep("FD mean", 3), rep("reader 2",3), rep("DVARS mean",3)),
+                boxModel=c("noise", "interpretability","structure clarity", "noise", "interpretability","structure clarity","noise", "interpretability","structure clarity","noise", "interpretability","structure clarity","noise", "interpretability","structure clarity","noise", "interpretability", "structure clarity", "noise", "interpretability", "structure clarity"))
+dat$boxModel<-factor(dat$boxModel, levels=c("noise","interpretability", "structure clarity"))
+
+                     df1 <- dat %>%
+  group_by(boxOdds, boxModel) %>%
+  group_by(ylabel, boxModel)%>%
+  group_by(boxCIHig, boxModel)%>%
+  group_by(boxCILow, boxModel)
+ 
+    
+                     
+p_ten <- ggplot(df1, aes(x = boxOdds, y = ylabel, color= boxModel) )
+p_gm_ten <-p_ten + geom_vline(aes(xintercept = 1), size = .25, linetype = "dashed") +
+  geom_errorbarh(aes(xmax = boxCIHig, xmin = boxCILow, group= boxModel), size = 0.3, height = 
+                   0.3)  +
+  geom_point(size = 5) +coord_trans(x="log10")+
+  theme_tufte_revised(base_family = "sans", base_size = 30)+scale_x_continuous(breaks = seq(0,7,1) )+ylab(" Fixed effects")+scale_colour_manual(values=c("#5e3c99","#fdb863","#e66101"))+
+  xlab("Odds ratio (log scale)")+theme(axis.text.x =element_text(size=20, colour="black"))+labs(colour=" ")+theme(axis.text.y =element_text(colour = "black"))+theme(axis.title.x = (element_text(size = 30)))+theme(axis.title.y = (element_text(size = 30)))
+
+ggsave("p_gm_ten.png", p_gm_ten,width = 35, height = 25, units = "cm", dpi = 500) 
+```
+
+``` {r, echo=FALSE, warning=FALSE}
+clmm_noise_max_ten_dvars$coefficients
+#odds ratio for segmentsRS_A
+or_rsa<-exp(clmm_noise_max_ten_dvars$coefficients[4])
+#odds ratio for segmentsRS_B
+or_rsb<-exp(clmm_noise_max_ten_dvars$coefficients[5])
+#odds ratio for segmentsRS_c
+or_rsc<-exp(clmm_noise_max_ten_dvars$coefficients[6])
+#odds ratio for segmentsRS_D
+or_rsd<-exp(clmm_noise_max_ten_dvars$coefficients[7])
+#odds ratio for hm_max
+or_hm_max<-exp(clmm_noise_max_ten_dvars$coefficients[8])
+#odds ratio for raters
+or_raters<-exp(clmm_noise_max_ten_dvars$coefficients[10])
+#odds ratio for hm max dvars
+or_dvars<-exp(clmm_noise_max_ten_dvars$coefficients[9])
+#confidence intervals for coefficients
+confi<-confint(clmm_noise_max_ten_dvars)
+#lower confidelimit for odds ratio of segmentsRS_A
+lo_rsa<-exp(confi[4,1])
+#higher confidence limit for odds ratio of segmentsRS_A
+hi_rsa<-exp(confi[4,2])
+#lower confidence limit for odds ratio of segmentsRS_B
+lo_rsb<-exp(confi[5,1])
+#higher confidence limit for odds ratio of segmentsRS_B
+hi_rsb<-exp(confi[5,2])
+#lower confidence limit for odds ratio of segmentsRS_c
+lo_rsc<-exp(confi[6,1])
+#higher confidence limit for odds ratio of segmentsRS_c
+hi_rsc<-exp(confi[6,2])
+#lower confidence limit for odds ratio of segmentsRS_D
+lo_rsd<-exp(confi[7,1])
+#higher confidence limit for odds ratio of segmentsRS_D
+hi_rsd<-exp(confi[7,2])
+#lower confidence limit for odds ratio of hm_max
+lo_hm_max<-exp(confi[8,1])
+#higher confidence limit for odds ratio of hm_max
+hi_hm_max<-exp(confi[8,2])
+#lower confidence limit for odds ratio of raters
+lo_raters<-exp(confi[10,1])
+#higher confidence limit for odds ratio of raters
+hi_raters<-exp(confi[10,2])
+#lower confidence limit for odds ratio of dvars
+lo_dvars<-exp(confi[9,1])
+#higher confidence limit for odds ratio of dvars
+hi_dvars<-exp(confi[9,2])
+#labels
+boxLabels<-c("0.2 scan", "0.4 scan", "0.6 scan","0.8 scan", "FD max", "reader 2", "DVARS max")
+boxLabels<-factor(boxLabels, levels=c("0.2 scan", "0.4 scan", "0.6 scan","0.8 scan", "FD max", "reader 2", "DVARS max"))
+
+#odds ratio for segmentsRS_A
+or_rsa_sc<-exp(clmm_sc_max_ten_dvars$coefficients[4])
+#odds ratio for segmentsRS_B
+or_rsb_sc<-exp(clmm_sc_max_ten_dvars$coefficients[5])
+#odds ratio for segmentsRS_c
+or_rsc_sc<-exp(clmm_sc_max_ten_dvars$coefficients[6])
+#odds ratio for segmentsRS_D
+
+or_rsd_sc<-exp(clmm_sc_max_ten_dvars$coefficients[7])
+#odds ratio for hm_max
+or_hm_max_sc<-exp(clmm_sc_max_ten_dvars$coefficients[8])
+#odds ratio for raters
+or_raters_sc<-exp(clmm_sc_max_ten_dvars$coefficients[9])
+#odds ratio for dvars
+or_dvars_sc<-exp(clmm_sc_max_ten_dvars$coefficients[10])
+#confidence intervals for coefficients
+confi_sc<-confint(clmm_sc_max_ten_dvars)
+#lower confidence limit for odds ratio of segmentsRS_A
+lo_rsa_sc<-exp(confi_sc[4,1])
+#higher confidence limit for odds ratio of segmentsRS_A
+hi_rsa_sc<-exp(confi_sc[4,2])
+#lower confidence limit for odds ratio of segmentsRS_B
+lo_rsb_sc<-exp(confi_sc[5,1])
+#higher confidence limit for odds ratio of segmentsRS_B
+hi_rsb_sc<-exp(confi_sc[5,2])
+#lower confidence limit for odds ratio of segmentsRS_c
+lo_rsc_sc<-exp(confi_sc[6,1])
+#higher confidence limit for odds ratio of segmentsRS_c
+hi_rsc_sc<-exp(confi_sc[6,2])
+#lower confidence limit for odds ratio of segmentsRS_D
+lo_rsd_sc<-exp(confi_sc[7,1])
+#higher confidence limit for odds ratio of segmentsRS_D
+hi_rsd_sc<-exp(confi_sc[7,2])
+#lower confidence limit for odds ratio of hm_max
+lo_hm_max_sc<-exp(confi_sc[8,1])
+#higher confidence limit for odds ratio of hm_max
+hi_hm_max_sc<-exp(confi_sc[8,2])
+#lower confidence limit for odds ratio of raters
+lo_raters_sc<-exp(confi_sc[9,1])
+#higher confidence limit for odds ratio of raters
+hi_raters_sc<-exp(confi_sc[9,2])
+#lower confidence limit for odds ratio of dvars
+lo_dvars_sc<-exp(confi_sc[10,1])
+#higher confidence limit for odds ratio of dvars
+hi_dvars_sc<-exp(confi_sc[10,2])
+
+#confidence intervals
+confi1<-confint(gm_qual_max_ten_dvars, parm="beta_", method="Wald")
+#odds ratio for hm_max
+or_hm_max_gm<-exp(gm_qual_max_ten_dvars@beta[2])
+#odds ratio for segmentRS_A
+or_rsa_gm<-exp(gm_qual_max_ten_dvars@beta[3])
+#odds ratio for period3
+or_rsb_gm<-exp(gm_qual_max_ten_dvars@beta[4])
+#odds ratio for period4
+or_rsc_gm<-exp(gm_qual_max_ten_dvars@beta[5])
+#odds ratio for segmentRS_D
+or_rsd_gm<-exp(gm_qual_max_ten_dvars@beta[6])
+#odds ratio for raters
+or_raters_gm<-exp(gm_qual_max_ten_dvars@beta[7])
+#odds ratio for dvars
+or_dvars_gm<-exp(gm_qual_max_ten_dvars@beta[9])
+#lower confidence limit for odds ratio of hm_max
+lo_hm_max_gm<-exp(confi1[2,1])
+#higher confidence limit for odds ratio of hm_max
+hi_hm_max_gm<-exp(confi1[2,2])
+#lower confidence limit for odds ratio of segmentRS_A
+lo_rsa_gm<-exp(confi1[3,1])
+#higher confidence limit for odds ratio of segmentRS_A
+hi_rsa_gm<-exp(confi1[3,2])
+#lower confidence limit for odds ratio of segmentRS_B
+lo_rsb_gm<-exp(confi1[4,1])
+#higher confidence limit for odds ratio of segmentRS_B
+hi_rsb_gm<-exp(confi1[4,2])
+#lower confidence limit for odds ratio of segmentRS_C
+lo_rsc_gm<-exp(confi1[5,1])
+#higher confidence limit for odds ratio of segmentRS_C
+hi_rsc_gm<-exp(confi1[5,2])
+#lower confidence limit for odds ratio of segmentRS_D
+lo_rsd_gm<-exp(confi1[6,1])
+#higher confidence limit for odds ratio of segmentRS_D
+hi_rsd_gm<-exp(confi1[6,2])
+#lower confidence limit for odds ratio of raters
+lo_raters_gm<-exp(confi1[7,1])
+#higher confidence limit for odds ratio of raters
+hi_raters_gm<-exp(confi1[7,2])
+
+#lower confidence limit for odds ratio of dvars
+lo_dvars_gm<-exp(confi1[9,1])
+#higher confidence limit for odds ratio of dvars
+hi_dvars_gm<-exp(confi1[9,2])
+
+
+#dataframe for odds ratios
+dat_max<-data.frame(boxOdds=c(or_rsa,or_rsa_gm,or_rsa_sc, or_rsb,or_rsb_gm,or_rsb_sc,or_rsc,or_rsc_gm,or_rsc_sc, or_rsd,or_rsd_gm,or_rsd_sc, or_hm_max,or_hm_max_gm,or_hm_max_sc, or_raters,or_raters_gm,
+                          or_raters_sc, or_dvars, or_dvars_gm, or_dvars_sc), 
+                boxCILow=c(lo_rsa,lo_rsa_gm,lo_rsa_sc, lo_rsb,lo_rsb_gm,lo_rsb_sc, lo_rsc,lo_rsc_gm,lo_rsc_sc, lo_rsd,lo_rsd_gm,lo_rsd_sc, lo_hm_max,lo_hm_max_gm,lo_hm_max_sc,
+                           lo_raters,lo_raters_gm, lo_raters_sc, lo_dvars, lo_dvars_gm, lo_dvars_sc),
+                boxCIHig=c(hi_rsa,hi_rsa_gm,hi_rsa_sc, hi_rsb,hi_rsb_gm,hi_rsb_sc, hi_rsc,hi_rsc_gm,hi_rsc_sc, hi_rsd,hi_rsd_gm,hi_rsd_sc,hi_hm_max,hi_hm_max_gm,hi_hm_max_sc, hi_raters, 
+                           hi_raters_gm, hi_raters_sc, hi_dvars, hi_dvars_gm, hi_dvars_sc) 
+                , ylabel=c(rep("0.2 scan",3), rep("0.4 scan",3), rep("0.6 scan",3), rep("0.8 scan",3), rep("FD max", 3), rep("reader 2",3), rep("DVARS max",3)),
+                boxModel=c("noise", "interpretability","structure clarity", "noise", "interpretability","structure clarity","noise", "interpretability","structure clarity","noise", "interpretability","structure clarity","noise", "interpretability","structure clarity","noise", "interpretability", "structure clarity", "noise", "interpretability", "structure clarity"))
+
+
+dat_max$boxModel<-factor(dat_max$boxModel, levels=c("noise","interpretability", "structure clarity"))
+
+                     df2 <- dat_max %>%
+  group_by(boxOdds, boxModel) %>%
+  group_by(ylabel, boxModel)%>%
+  group_by(boxCIHig, boxModel)%>%
+  group_by(boxCILow, boxModel)
+
+        
+                     
+p_max_ten <- ggplot(df2, aes(x = boxOdds, y = ylabel, color= boxModel) )
+p_max_ten <-p_max_ten + geom_vline(aes(xintercept = 1), size = .25, linetype = "dashed") +
+  geom_errorbarh(aes(xmax = boxCIHig, xmin = boxCILow, group= boxModel), size = 0.3, height = 
+                   0.3)  +
+  geom_point(size = 5) +coord_trans(x="log10")+
+  theme_tufte_revised(base_family = "sans", base_size = 30)+scale_x_continuous(breaks = seq(0,7,1) )+ylab(" Fixed effects")+scale_colour_manual(values=c("#5e3c99","#fdb863","#e66101"))+
+  xlab("Odds ratio (log scale)")+theme(axis.text.x =element_text(size=20, colour="black"))+labs(colour=" ")+theme(axis.text.y =element_text(colour = "black"))+theme(axis.title.x = (element_text(size = 30)))+theme(axis.title.y = (element_text(size = 30)))
+
+ggsave("p_max_ten.png", p_max_ten,width = 35, height = 25, units = "cm", dpi = 500) 
+
+
+or_max_mean_dvars<-ggarrange(p_gm_ten, p_max_ten, common.legend = TRUE, font.label = list(size = 32, color = "black", face = "bold"))
+
+
+ggsave("or_max_mean_dvars.pdf", or_max_mean_dvars,width = 55, height = 25, units = "cm", dpi = 500)
+ggsave("or_max_mean_dvars.png", or_max_mean_dvars,width = 55, height = 25, units = "cm", dpi = 500)
+ggsave("or_max_mean_dvars.tiff", or_max_mean_dvars, width = 50, height = 25, compression = "lzw", units = "cm")
+
+```
+
+# making a plot for sensitivity data
+```{r, echo=FALSE, warning=FALSE, fig.height=8, fig.width=10}
+data_frame_sens<- data.frame (scan_segment=c("0.8 scan","0.6 scan","0.4 scan","0.2 scan", "0.8 scan","0.6 scan","0.4 scan","0.2 scan"), readers=c("reader 1", "reader 1", "reader 1","reader 1","reader 2", "reader 2", "reader 2", "reader 2"), value=c(91,83,70,57,82,77,64,56), CI=c(6,9,12,14,10,11,14,15))
+
+                                                       
+gplot_sen<- ggplot(data_frame_sens, aes(scan_segment, value, colour=readers)) +
+  geom_point(position = position_dodge(width = .8), size = 4)+
+ 
+    geom_errorbar(aes(ymin = value - CI, ymax = value + CI), position = position_dodge(width = .8), size = 0.7) +
+      #geom_errorbar()+
+    #geom_line() +
+    labs(x = "Scan segments ",y="Sensitivity (%) ", colour= " ") +
+      #geom_hline(aes(yintercept = 0))
+   theme_tufte_revised(base_size = 25, base_family = "sans")+ scale_color_manual(values=c("#de2d26", "#08519c"))+theme(axis.title.y = element_text(margin=margin(t = 0, r = 30, b = 0, l = 0)))+theme(axis.title.x = element_text(size=20, margin = margin(t = 20, r = 0, b = 0, l = 0)))
+
+ggsave("sensitivty_CI_plot.png", gplot_sen,width = 23, height = 18, units = "cm", dpi = 500)
+ggsave("sensitivty_CI_plot.pdf", gplot_sen,width = 23, height = 18, units = "cm", dpi = 500)
+ggsave("sensitivty_CI_plot.tiff", gplot_sen,width = 23, height = 18, units = "cm", compression = "lzw")
+
+``` 
+
+
+## Interrater agreement on each evaluation 
+```{r, echo=FALSE, warning=FALSE}
+#make empty lists for each segment
+rs_e_kappa_ls<-list()
+rs_d_kappa_ls<-list()
+rs_c_kappa_ls<-list()
+rs_b_kappa_ls<- list()
+rs_a_kappa_ls<- list()
+#loop through each variable (noise, sc etc)
+for (i in 2:(ncol(ig_tsa_rating))) {
+ #define empty vectors for each segment
+  vec_e <- numeric(5)
+  vec_d <- numeric(5)  
+  vec_c <- numeric(5)
+  vec_b <- numeric(5)
+  vec_a <- numeric(5)
+  
+  for (e in 1:5) { #fill the vector
+    #define the vector for each loop
+    vec_e[e] <- i^e
+    vec_d[e] <- i^e
+    vec_c[e] <- i^e
+    vec_b[e] <- i^e
+    vec_a[e] <- i^e
+    rs_e_kappa<-(paste(colnames(ig_tsa_rating)[i], "kappa_e", sep="_"))
+    rs_d_kappa<-(paste(colnames(ig_tsa_rating)[i], "kappa_d", sep="_"))
+    rs_c_kappa<-(paste(colnames(ig_tsa_rating)[i], "kappa_c", sep="_"))
+    rs_b_kappa<-(paste(colnames(ig_tsa_rating)[i], "kappa_b", sep="_"))
+    rs_a_kappa<-(paste(colnames(ig_tsa_rating)[i], "kappa_a", sep="_"))
+  
+    #calculate coens kappe for each segment at each variable
+    assign(rs_e_kappa, kappa2(data.frame(ig_tsa_rating[1:98,i], kv_tsa_rating[1:98,i]), weight=c("squared"), sort.levels=FALSE))
+    assign(rs_d_kappa, kappa2(data.frame(ig_tsa_rating[99:196,i], kv_tsa_rating[99:196,i]), weight=c("squared"), sort.levels=FALSE))
+    assign(rs_c_kappa, kappa2(data.frame(ig_tsa_rating[197:294,i], kv_tsa_rating[197:294,i]), weight=c("squared"), sort.levels=FALSE))
+    assign(rs_b_kappa, kappa2(data.frame(ig_tsa_rating[295:392,i], kv_tsa_rating[295:392,i]), weight=c("squared"), sort.levels=FALSE))
+    assign(rs_a_kappa, kappa2(data.frame(ig_tsa_rating[393:490,i], kv_tsa_rating[393:490,i]), weight=c("squared"), sort.levels=FALSE))
+  #assign z, p value and kappa values to the vector defined above for each segment
+  vec_e<- c(get(rs_e_kappa)$value, get(rs_e_kappa)$statistic, get(rs_e_kappa)$p.value)
+  vec_d<- c(get(rs_d_kappa)$value, get(rs_d_kappa)$statistic, get(rs_d_kappa)$p.value)
+  vec_c<- c(get(rs_c_kappa)$value, get(rs_c_kappa)$statistic, get(rs_c_kappa)$p.value)
+  vec_b<- c(get(rs_b_kappa)$value, get(rs_b_kappa)$statistic, get(rs_b_kappa)$p.value)
+  vec_a<- c(get(rs_a_kappa)$value, get(rs_a_kappa)$statistic, get(rs_a_kappa)$p.value)
+  
+  }
+  #populate the empty lists defined before the loop for each segment
+  rs_e_kappa_ls[[i]] <- vec_e
+  rs_d_kappa_ls[[i]] <- vec_d
+  rs_c_kappa_ls[[i]] <- vec_c
+  rs_b_kappa_ls[[i]] <- vec_b
+  rs_a_kappa_ls[[i]] <- vec_a
+}
+
+
+#turn them to tables
+  tbl_kappa_rs_e <- do.call(rbind, rs_e_kappa_ls)
+  tbl_kappa_rs_d <- do.call(rbind, rs_d_kappa_ls)
+  tbl_kappa_rs_c <- do.call(rbind, rs_c_kappa_ls)
+  tbl_kappa_rs_b<- do.call(rbind, rs_b_kappa_ls)
+  tbl_kappa_rs_a <- do.call(rbind, rs_a_kappa_ls)
+ 
+#take only three digits of the outcomes
+  options(digits=3) 
+  #make data frame from the kappa values of each segment at different variable
+  df_kappa<- data.frame(cbind(tbl_kappa_rs_e[,1],tbl_kappa_rs_d[,1], tbl_kappa_rs_c[,1], tbl_kappa_rs_b[,1], tbl_kappa_rs_a[,1]))  
+    #define rownames and colnames  
+  df_kappa$rownames<- c("Noise (1-3)", "Structure Clarity (3-1)", "Hypoperfusion Asessment (Y/N/U)", "Lesion Corresponds to DWI (Y/N/U)", "Interpretable (Y/N)")
+  df_kappa<-df_kappa[,c(6,1,2,3,4,5)]
+ colnames(df_kappa)<- c("rownames","full scan", "0.8 scan", "0.6 scan", "0.4 scan", "0.2 scan")
+  
+   #use kable function for making the tables                     
+
+ kable(df_kappa) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width=F)%>%
+    column_spec(1, bold=T,border_right = T)%>%
+  row_spec(0, bold=T, font_size = 14)%>%
+  row_spec(c(1,3,5), bold = T, color="white", background = "#969696")%>%
+ row_spec(c(2,4), bold = T, background = "white", color="#525252")%>%
+column_spec(1, background= "white", color = "#525252", bold=T)%>%
+save_kable(file = "kappa_tbl.html", self_contained = T)
+  
+fx_kappa<-regulartable(df_kappa)
+fx_kappa<-set_header_labels(fx_kappa, rownames=" ") 
+fx_kappa<-set_formatter_type(fx_kappa, fmt_double="%.2f")
+fx_kappa<-italic(fx_kappa, part="header") 
+fx_kappa<-fontsize(fx_kappa, part = "header", size = 14)
+fx_kappa<-width(fx_kappa, width = 1)
+fx_kappa<- fontsize(fx_kappa, part = "body", size = 13)
+fx_kappa<-autofit(fx_kappa)
+ # set width of all columns to .75 in
+fx_kappa<-align(fx_kappa, part="all", align="center")
+fx_kappa<-theme_vanilla(fx_kappa)
+fx_kappa<- align(fx_kappa, j=1, align="left")
+fx_kappa<-height(fx_kappa, height = .5, part = "header")
+fx_kappa<-height(fx_kappa, height = .4, part = "body")
+big_b <- fp_border(color="black", width = 1)
+fx_kappa<-vline_left( fx_kappa, border = big_b, part = "all" )
+fx_kappa<-vline_right( fx_kappa, border = big_b, part = "all" )
+print(fx_kappa)
+ppt <- read_pptx()
+ppt <- add_slide(ppt, layout = "Title and Content", master = "Office Theme")
+ppt <- ph_with_flextable(ppt, value = fx_kappa, type = "body") 
+print(ppt, target = "kappa_tbl.pptx") 
+
+
+
+
+```
+
+## sensitivity and specificity calculation on interpretability evaluation across segments
+```{r, echo=FALSE, warning=FALSE}
+#subset the data for first 101 rows as glmer_qualitative df consists of columns for each segment and each rater for interpretability evaluation
+subset_glmer_qualitative<- data.frame(glmer_qualitative[1:98,])
+#change NA values with Uninterpretable and have it as another level
+subset_glmer_qualitative<- data.frame(lapply(subset_glmer_qualitative, function(x) {
+     if(anyNA(x)) {
+     levels(x) <- c(levels(x), "U")
+     x[is.na(x)] <- "U"
+     x}
+     else x
+
+  }))
+#change 2 empty strigns in rater 1's reference to "U" as well
+levels(subset_glmer_qualitative$k_rs_e)[1]<-"U"
+#reorder the levels aligned with the other factors
+subset_glmer_qualitative$k_rs_e<- ordered(subset_glmer_qualitative$k_rs_e, levels=c("n", "y", "U"))
+#sensitivity and specificity calculation separately for each rater and segment (but we take only sensitivity into account, since we converted uninterpretable to "n")
+#reference for rater 1
+ref_k_wt_uni<- subset_glmer_qualitative$k_RS_e_uni
+#reference for rater 2
+ref_i_wt_uni<- subset_glmer_qualitative$i_rs_e_uni
+
+#rater 1's evaluation with Uninterpretable included  as another level
+print("Kersten")
+for (i in 11:(ncol(subset_glmer_qualitative)-11)){
+  print(colnames(subset_glmer_qualitative[i]))
+  
+print(confusionMatrix(subset_glmer_qualitative[,i], ref_k_wt_uni,positive=levels(ref_k_wt_uni)[2])$byClass)
+}
+#rater 2's evaluation with uninterpretable included
+print("Ivana")
+for (i in 22:(ncol(subset_glmer_qualitative))){
+print(confusionMatrix(subset_glmer_qualitative[,i], ref_i_wt_uni, positive=levels(ref_i_wt_uni)[2])$byClass)
+  print(colnames(subset_glmer_qualitative[i]))}
+
+tb_sens<- read.csv(paste(data_path, "sen_only_two_raters.csv", sep="/"),sep=";", header=T)
+colnames(tb_sens)<- c(" ", "0.8 scan", "0.6 scan", "0.4 scan", "0.2 scan" )
+#use flextable function for table
+flex<-regulartable(tb_sens)
+flex<-merge_v(flex, j=c(1,2))
+#flex<- set_header_labels( flex, sens_spe = " ", raters= " ", V2= "0.8 scan", V3="0.6 scan", V4="0.4 scan", V5="0.2 scan")%>% 
+set_formatter_type(flex, fmt_double="%.2f")
+flex<-italic(flex, part="header")
+flex<-fontsize(flex, part = "header", size = 13) 
+flex<- fontsize(flex, part = "body", size = 13)
+#flex<- font(flex,fontname="sans")
+flex<-autofit(flex)
+flex<-width(flex, width = 1) # set width of all columns to .75 in
+flex<-align(flex, part="all", align="center")
+flex<-theme_vanilla(flex)
+flex<-align(flex, part="all", align="center")
+flex<-height(flex, height = .5, part = "header")
+flex<-height(flex, height = .4, part = "body")
+big_b <- fp_border(color="black", width = 1)
+flex<-vline_left( flex, border = big_b, part = "all" )
+flex<-vline_right( flex, border = big_b, part = "all" )
+print(flex)
+
+
+ppt_flex <- read_pptx()
+ppt_flex <- add_slide(ppt_flex, layout = "Title and Content", master = "Office Theme")
+ppt_flex <- ph_with_flextable(ppt_flex, value = flex, type = "body") 
+print(ppt_flex, target = "example_sen_only.pptx")
+
+ #set_formatter_type(x, fmt_double = "%.03f", fmt_integer = "%.0f",
+
+```
+
+##demographics preparation
+``` {r, echo=FALSE, warning=FALSE}
+#preparation demographic chard FOR ALL PATIENTS
+
+demographic_multiband<- read.csv(paste(data_path,"demographics_nonames.csv",sep="/"), sep = ";", stringsAsFactors = FALSE) 
+
+levels_allsub<- as.factor(levels(rbind_glmer_qual_df_dvars$subject))
+levels_allsub<- as.factor(gsub("[^0-9]0*", "", as.factor(levels_allsub)) )
+demog_allsubs <- demographic_multiband[with(demographic_multiband, code_folders %in% levels_allsub),]
+timetomri_subgroups<- read.csv(paste(data_path,"subset_demog.csv", sep="/"), sep=";")
+demog_allsubs$time_difference<- timetomri_subgroups$demog_allsubs.time_difference
+demog_allsubs$Onset_clarity<- timetomri_subgroups$demog_allsubs.Onset_clarity
+demog_allsubs$time_onset_mri<- timetomri_subgroups$time_onset_mri
+demog_allsubs$time_difference<- gsub("*h", "", demog_allsubs$time_difference )
+demog_allsubs$STROKE.LOCATION<- gsub("*/L", "", demog_allsubs$STROKE.LOCATION )
+demog_allsubs$STROKE.LOCATION<- gsub("*/R", "", demog_allsubs$STROKE.LOCATION )
+demog_allsubs$NIHSS.a<-as.numeric(demog_allsubs$NIHSS.a)
+demog_allsubs$NIHSS.d<-as.numeric(demog_allsubs$NIHSS.d)
+demog_allsubs$MRS.a<-as.numeric(demog_allsubs$MRS.a)
+demog_allsubs$MRS.d<-as.numeric(demog_allsubs$MRS.d)
+demog_allsubs$time_difference<-as.numeric(demog_allsubs$time_difference)
+demog_allsubs$Occlusion<-as.factor(demog_allsubs$Occlusion)
+demog_allsubs$Thrombolysis..T.y<-as.factor(demog_allsubs$Thrombolysis..T.)
+demog_allsubs$Mechanical.thrombectomy..M.y<-as.factor(demog_allsubs$Thrombolysis..T.)
+summary(demog_allsubs[,c(2,4,10,11,12,13,14,19,21,23,24,25,26)], fast=TRUE)
+
+summary(demog_allsubs$SEX)
+summary(demog_allsubs$time_difference <= 6)
+summary(demog_allsubs$time_difference >= 24)
+summary(demog_allsubs$time_difference >6 & demog_allsubs$time_difference <= 12)
+summary(demog_allsubs$time_difference >12 & demog_allsubs$time_difference <24)
+
+#preparation demographics for patients with hypoperfusion
+print("Patients with hypoperfusion")
+levels_subs_withhypo<- as.factor(levels(lmer.df_dvars$subject))
+levels_subs_withhypo<- as.factor(gsub("[^0-9]0*", "", as.factor(levels_subs_withhypo)) )
+demog_subs_quanti<- demog_allsubs[with(demog_allsubs, code_folders %in% levels_subs_withhypo),]
+summary(demog_subs_quanti[,c(2,4,10,11,12,13,14,19,21,23,24,25,26)], fast=TRUE)
+
+summary(demog_subs_quanti$time_difference <= 6)
+summary(demog_subs_quanti$time_difference >= 24)
+summary(demog_subs_quanti$time_difference >6 & demog_allsubs$time_difference <= 12)
+summary(demog_subs_quanti$time_difference >12 & demog_allsubs$time_difference <24)
+
+
+
+#demographics for patients without hypoperfusion
+print("Patients without hypoperfusion")
+levels_subs_withouthypo<-as.factor(levels(subs_nohypo_2))
+levels_subs_withouthypo<- as.factor(gsub("[^0-9]0*", "", as.factor(levels_subs_withouthypo)) )
+demog_subs_quali<- demog_allsubs[with(demog_allsubs, code_folders %in% levels_subs_withouthypo),]
+summary(demog_subs_quali[,c(2,4,10,11,12,13,14,19,21,23,24,25,26)])
+
+#pull the demographics table for both study groups
+fx_demog <- read_delim(paste(data_path, "demographics_all_tbl.csv", sep = "/"), 
+    ";", escape_double = FALSE, col_names = F, 
+    trim_ws = TRUE)
+quanti_demog <- read_delim(paste(data_path, "quanti_demog.csv",sep="/"), 
+    ";", escape_double = FALSE, col_names = F, 
+    trim_ws = TRUE)
+
+#make a regular table for all sub
+
+fx_demog<- regulartable(fx_demog) 
+fx_demog<- align(fx_demog, j=1, align="left")
+fx_demog<-width(fx_demog, width = 3)
+
+border_remove(fx_demog)
+border_outer(fx_demog, border = big_b, part = "all" )
+ border_inner_v(fx_demog, border = big_b, part="body")
+#border_inner_h(fx_demog, border = big_b, part="body")
+#fx_demog<- hline_top( fx_demog, border = big_b, part = "body" )
+ fx_demog<-set_header_labels(fx_demog, X1 = " ", X2= " ", X3= "qualitative analysis (n=63)", X4= "Quantitative analysis (n=42)")
+fx_demog<-merge_v(fx_demog, j=c(1))
+fx_demog<-fontsize(fx_demog, part = "body", size = 14) 
+fx_demog<-align(fx_demog, align = "center", part="body")
+fx_demog<-height(fx_demog, height = .5, part = "body")
+
+
+fx_demog
+ppt_fx_demog <- read_pptx()
+ppt_fx_demog <- add_slide(ppt_fx_demog, layout = "Title and Content", master = "Office Theme")
+ppt_fx_demog <- ph_with_flextable(ppt_fx_demog, value = fx_demog, type = "body") 
+print(ppt_fx_demog, target = "all_flex_1.pptx")
+
+```
+
+##supplements and extras
+``` {r, echo=FALSE, warning=FALSE, fig.height=8, fig.width=20}
+#Bland Altman at 0 and 4.6 s thresholds
+par(mar=c(5,5.5,5.5,5))
+
+segments_0<- c("A0", "B0", "C0", "D0")
+segments_46<- c("A46", "B46", "C46", "D46")
+#use Blandr function, loop through segments at 4.6 s and 0 s  
+for (y in 1:length(segments_46)) {
+  volumes_subset_y <- get(paste(segments_46[y],"volumes_subset_data", sep = "_"))
+  BA_46<-paste("RS_E", segments_46[y],sep="_") 
+  assign (BA_46, blandr.draw(E46_volumes_subset_data$Volume, volumes_subset_y$Volume, ciDisplay = FALSE, ciShading=TRUE,plotProportionalBias = TRUE, plotProportionalBias.se = TRUE, point_size = 25, plotTitle=" ") +geom_point(size = 0.1)+geom_hline(yintercept = 0, color = "black", size = 0.8)+xlab(" ")+ylab(" ")+theme_tufte_revised(base_size = 20, base_family = "sans")+ylim(-100,100)+theme(axis.title.y = element_text(size=20, hjust=0.5,margin = margin(t = 0, r = 25, b = 0, l = 0)))+xlim(0,75)+theme(axis.title.x = element_text(size=18, hjust=0.5,margin = margin(t = 25, r = 0, b = 0, l = 0))) )
+}
+figure_BA_46<- ggarrange(RS_E_D46, RS_E_C46, RS_E_B46, RS_E_A46, labels = c("A", "B", "C", "D"))
+
+figure_BA_46<-annotate_figure(figure_BA_46, left= text_grob("Difference (mL)", size=25, rot=90), bottom=text_grob("Average (mL)", size=20, hjust=0.5, vjust=0.1))
+print(figure_BA_46)
+ggsave("bland_46.png", figure_BA_46, width = 25, height = 20, units = "cm", dpi = 500 )
+
+
+for (z in 1:length(segments_0)) {
+  volumes_subset_z <- get(paste(segments_0[z],"volumes_subset_data", sep = "_"))
+  BA_0<-paste("RS_E", segments_0[z], sep="_") 
+  assign (BA_0, blandr.draw(E0_volumes_subset_data$Volume, volumes_subset_z$Volume, ciDisplay = FALSE, ciShading=TRUE,plotProportionalBias = TRUE, plotProportionalBias.se = TRUE, point_size = 25, plotTitle=" ") +geom_point(size = 0.1)+geom_hline(yintercept = 0, color = "black", size = 0.8)+xlab(" ")+ylab(" ")+theme_tufte_revised(base_size = 20, base_family = "sans")+theme(axis.title.y = element_text(size=20, hjust=0.5,margin = margin(t = 0, r = 25, b = 0, l = 0)))+xlim(0,150)+theme(axis.title.x = element_text(size=18, hjust=0.5,margin = margin(t = 25, r = 0, b = 0, l = 0))) )
+}
+
+
+
+figure_BA_0<- ggarrange(RS_E_D0, RS_E_C0, RS_E_B0, RS_E_A0, labels = c("A", "B", "C", "D"))
+figure_BA_0<-annotate_figure(figure_BA_0, left= text_grob("Difference (mL)", size=25, rot=90), bottom=text_grob("Average (mL)", size=20, hjust=0.5, vjust=0.1))
+print(figure_BA_0)
+ggsave("bland_0.png", figure_BA_0, width = 25, height = 20, units = "cm", dpi = 500 )
+
+
+
+
+
+
+
+## violin plot for correlation coef
+vplot_fig_cc<- ggplot(cc_subs_long, aes(x=variable, y=value))+geom_violin(fill="#bdbdbd", color="#636363", adjust=0.5)+geom_boxplot(width=0.09)+labs(x="Scan segments", y="Correlation coefficient")+theme_tufte_revised(base_size = 27, base_family = "sans")+theme(axis.title.y = element_text(size=25, hjust=0.5,margin = margin(t = 0, r = 25, b = 0, l = 0)))+theme(axis.title.x = element_text(size=25, hjust=0.5,margin = margin(t = 25, r = 0, b = 0, l = 0)))+ scale_x_discrete(labels= c("0.8 scan", "0.6 scan", "0.4 scan", "0.2 scan"))
+
+print(vplot_fig_cc)
+ggsave("cc_23_vplot.png", vplot_fig_cc, width = 30, height = 20, units = "cm", dpi = 500)
+ggsave("cc_23_vplot.pdf", vplot_fig_cc, width = 30, height = 20, units = "cm", dpi = 500)
+lmer_cc<-lmer(value ~ variable+(1|subject), data=cc_subs_long)
+summary(lmer_cc)
+r.squaredGLMM(lmer_cc)
+
+
+##grouped violin plot for dc and cc together
+#prepare the data for grouped violin plots
+#change the level names in correlation coef dataframe
+levels(cc_subs_long$variable)[levels(cc_subs_long$variable)=="rs_d"]<- "RS_D"
+levels(cc_subs_long$variable)[levels(cc_subs_long$variable)=="rs_c"]<- "RS_C"
+levels(cc_subs_long$variable)[levels(cc_subs_long$variable)=="rs_b"]<- "RS_B"
+levels(cc_subs_long$variable)[levels(cc_subs_long$variable)=="rs_a"]<- "RS_A"
+melt_dc_cc<-rbind(dc_subs_long, cc_subs_long)
+melt_dc_cc$coefficient<-"Dice Coef"
+melt_dc_cc[237:472,4]<- "Correlation Coef"
+## do the violin together with median
+vplot_dc_cc<- ggplot(melt_dc_cc, aes(x=variable, y=value, fill=coefficient))+ geom_violin(position=position_dodge(1))+ geom_boxplot(width=0.1, position = position_dodge(1))+theme_classic(base_family = "sans", base_size = 20)
+print(vplot_dc_cc)
+
+segments_46<-c("A46", "B46", "C46", "D46")
+segments_23<- c("A23", "B23", "C23", "D23")
+segments_0<- c("A0", "B0", "C0", "D0")
+#arrange the plot margins just so that legends fit well
+par(mar=c(5,5.5,5.5,5))
+par(mfrow=c(2,2))
+#use Bland Altman function from MethCamp R package, loop through segments at different time lag thresholds
+for (x in 1:length(segments_46)) {
+  volumes_subset_x <- get(paste(segments_46[x],"volumes_subset_data", sep = "_"))
+  namx<-paste("RS_E", segments_46[x], sep="") 
+  assign (namx, BlandAltman(E46_volumes_subset_data$Volume, volumes_subset_x$Volume, maintit=paste("Segments E and", segments_46[x]),xlab="Mean (mL)", ylab= "Difference (mL)" , pch=16, print=FALSE))
+}
+
+for (y in 1:length(segments_23)) {
+  volumes_subset_y<-get(paste(segments_23[y],"volumes_subset_data", sep = "_"))
+  namy<-paste("RS_E", segments_23[y], sep="") 
+  assign(namy, BlandAltman(E23_volumes_subset_data$Volume, volumes_subset_y$Volume, maintit= paste("Segments E and", segments_23[y]),xlab="Mean (mL)", ylab= "Difference (mL)", pch=16, print=FALSE))
+}
+for (z in 1:length(segments_0)) {
+  volumes_subset_z<-get(paste(segments_0[z],"volumes_subset_data", sep = "_"))
+  namz<-paste("RS_E", segments_0[z], sep="")
+  assign(namz, BlandAltman(E0_volumes_subset_data$Volume, volumes_subset_z$Volume, maintit=paste("Segments E and", segments_0[z]),xlab="Mean (mL)", ylab= "Difference (mL)", pch=16))
+  
+  
+}
+#make the stargazer tables for limits of agreement and p-value of mean difference at each thresholds
+for ( i in c("0", "23", "46")) {
+  LoF_thr<- data.frame(cbind(get(paste("RS_ED", i,sep=""))$LoA, get(paste("RS_EC", i, sep=""))$LoA, get(paste("RS_EB",i, sep=""))$LoA, get(paste("RS_EA",i, sep=""))$LoA))
+  p_val_thr<- data.frame(cbind(get(paste("RS_ED", i,sep=""))$p.values[3], get(paste("RS_EC", i, sep=""))$p.values[3], get(paste("RS_EB",i, sep=""))$p.values[3], get(paste("RS_EA",i, sep=""))$p.values[3]))
+  nam_lof<- paste("lof_thr", i, sep="_")
+  assign(nam_lof, rbind(LoF_thr,p_val_thr))
+  col_lof<-get(nam_lof)
+  colnames(col_lof)<-c("4/5", "3/5", "2/5", "1/5")
+  rownames(col_lof)<- c("Mean difference (d)", "2.5 % limit", "97.5 % limit", "Standard deviation (s)", "P-value of the mean difference")
+  assign(nam_lof, col_lof)
+  stargazer(get(nam_lof), type="text", summary = FALSE, title=paste("Bland Altman plot statistics at",i, "s Threshold"))
+  
+}
+```
+
+ 

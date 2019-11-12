@@ -1,0 +1,8 @@
+"0","#preparation demographic chard FOR ALL PATIENTS"
+"0",""
+"0","#demographic_multiband<- read.csv(paste(data_path,""demographics_nonames.csv"",sep=""/""), sep = "";"", stringsAsFactors = FALSE) "
+"0",""
+"0","levels_allsub<- as.factor(levels(rbind_glmer_qual_df_dvars$subject))"
+"2","Error in levels(rbind_glmer_qual_df_dvars$subject) : 
+  object 'rbind_glmer_qual_df_dvars' not found
+"

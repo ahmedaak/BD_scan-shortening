@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1570457276882.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1494509806",
+    "id" : "D9850888",
+    "lastKnownWriteTime" : 1571125010,
+    "last_content_update" : 1573562426493,
+    "path" : "S:/AG/AG-CSB_NeuroRad2/khalila/MULTIBAND/multiband_data_last/R_project/R_notebook_multiband_v2_4.Rmd",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "1394,15",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

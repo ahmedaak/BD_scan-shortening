@@ -1,0 +1,114 @@
+"0","# rainbow plots"
+"0","library(vioplot)"
+"2","Lade nötiges Paket: sm
+"
+"2","Paket ‘sm’ wurde unter R Version 3.4.4 erstellt"
+"2","Package 'sm', version 2.2-5.6: type help(sm) for summary information
+"
+"2","Lade nötiges Paket: zoo
+"
+"2","Paket ‘zoo’ wurde unter R Version 3.4.4 erstellt"
+"2","
+Attache Paket: ‘zoo’
+
+"
+"2","The following objects are masked from ‘package:base’:
+
+    as.Date, as.Date.numeric
+
+"
+"0","library(readr)"
+"2","Paket ‘readr’ wurde unter R Version 3.4.4 erstellt"
+"0","library(tidyr)"
+"2","Paket ‘tidyr’ wurde unter R Version 3.4.4 erstellt"
+"2","
+Attache Paket: ‘tidyr’
+
+"
+"2","The following object is masked from ‘package:Matrix’:
+
+    expand
+
+"
+"0","library(ggplot2)"
+"0","library(Hmisc)"
+"2","Paket ‘Hmisc’ wurde unter R Version 3.4.4 erstellt"
+"2","Lade nötiges Paket: lattice
+"
+"2","Lade nötiges Paket: survival
+"
+"2","Paket ‘survival’ wurde unter R Version 3.4.4 erstellt"
+"2","Lade nötiges Paket: Formula
+"
+"2","Paket ‘Formula’ wurde unter R Version 3.4.4 erstellt"
+"2","
+Attache Paket: ‘Hmisc’
+
+"
+"2","The following object is masked from ‘package:jtools’:
+
+    %nin%
+
+"
+"2","The following objects are masked from ‘package:base’:
+
+    format.pval, units
+
+"
+"0","library(plyr)"
+"2","Paket ‘plyr’ wurde unter R Version 3.4.4 erstellt"
+"2","
+Attache Paket: ‘plyr’
+
+"
+"2","The following objects are masked from ‘package:Hmisc’:
+
+    is.discrete, summarize
+
+"
+"0","library(RColorBrewer)"
+"0","library(reshape2)"
+"2","Paket ‘reshape2’ wurde unter R Version 3.4.4 erstellt"
+"2","
+Attache Paket: ‘reshape2’
+
+"
+"2","The following object is masked from ‘package:tidyr’:
+
+    smiths
+
+"
+"0","source(""https://gist.githubusercontent.com/benmarwick/2a1bb0133ff568cbe28d/raw/fb53bd97121f7f9ce947837ef1a4c65a73bffb3f/geom_flat_violin.R"")"
+"2","Paket ‘dplyr’ wurde unter R Version 3.4.4 erstellt"
+"2","
+Attache Paket: ‘dplyr’
+
+"
+"2","The following objects are masked from ‘package:plyr’:
+
+    arrange, count, desc, failwith, id, mutate, rename, summarise, summarize
+
+"
+"2","The following objects are masked from ‘package:Hmisc’:
+
+    src, summarize
+
+"
+"2","The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+"
+"2","The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+"
+"0","# linear mixed models"
+"0","library(lme4)"
+"0","library(MuMIn)"
+"2","Paket ‘MuMIn’ wurde unter R Version 3.4.4 erstellt"
+"0","library(lmerTest)"
+"0","# Bland-Altman analysis"
+"0","library(blandr)"
+"2","Paket ‘blandr’ wurde unter R Version 3.4.4 erstellt"

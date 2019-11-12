@@ -1,0 +1,2 @@
+"0","#save the plot as pdf"
+"0","ggsave(""dice_23_vplot.png"", vplot_fig_dc, width = 30, height = 20, units = ""cm"", dpi = 500)"

@@ -1,0 +1,5 @@
+"0","thresholds<- c(""0"", ""23"", ""46"")"
+"0","for (i in thresholds) {"
+"0","  vioplot(x=get(paste(""E"", i,""_volumes_subset_data"", sep=""""))$Volume,get(paste(""D"", i,""_volumes_subset_data"", sep=""""))$Volume, get(paste(""C"", i,""_volumes_subset_data"", sep=""""))$Volume,get(paste(""B"", i,""_volumes_subset_data"", sep=""""))$Volume,get(paste(""A"", i,""_volumes_subset_data"", sep=""""))$Volume, names = c( ""full scan"", ""0.8 scan"", ""0.6 scan"", ""0.4 scan"", ""0.2 scan""))"
+"0","  title(xlab=""Scan Segment"", ylab=""Volume"", main=c(paste(i,""Threshold"")))"
+"0","}"

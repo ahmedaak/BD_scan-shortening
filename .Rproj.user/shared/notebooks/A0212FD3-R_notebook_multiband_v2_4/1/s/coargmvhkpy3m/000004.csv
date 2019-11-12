@@ -1,0 +1,8 @@
+"0","ppt <- read_pptx()"
+"0","ppt <- add_slide(ppt, layout = ""Title and Content"", master = ""Office Theme"")"
+"0","ppt <- ph_with_flextable(ppt, value = fx_kappa, type = ""body"") "
+"0","print(ppt, target = ""kappa_tbl.pptx"") "
+"1","[1]"
+"1"," ""S:/AG/AG-CSB_NeuroRad2/khalila/MULTIBAND/multiband_data_last/R_project/kappa_tbl.pptx"""
+"1","
+"

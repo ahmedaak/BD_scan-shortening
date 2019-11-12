@@ -1,0 +1,8 @@
+"0","#get A0,A23,A46 df(same applies to B,C,D,E)"
+"0","prefixes <- c(""A0"", ""B0"", ""C0"", ""D0"", ""E0"", ""A23"",""B23"", ""C23"", ""D23"", ""E23"", ""A46"", ""B46"", ""C46"", ""D46"", ""E46"")"
+"0","for(i in prefixes) {"
+"0","#subset these dataframes based on these prefixes indicating the segment and the time shift threshold applied "
+"0","volumes_subset_data <- volumes_output[grep (paste(""^"",i,sep = """"), volumes_output$Mask), ]"
+"0","assign(paste(i,""volumes_subset_data"", sep = ""_""),volumes_subset_data[,c(-2,-4)])"
+"0","#these outcome dataframes are of 55 observations and 3 variables(Subject, Mask, Volume)"
+"0","}"

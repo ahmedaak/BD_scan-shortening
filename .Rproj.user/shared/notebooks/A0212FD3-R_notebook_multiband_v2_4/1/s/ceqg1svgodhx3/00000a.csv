@@ -1,0 +1,8 @@
+"0","ppt_fx_demog <- read_pptx()"
+"0","ppt_fx_demog <- add_slide(ppt_fx_demog, layout = ""Title and Content"", master = ""Office Theme"")"
+"0","ppt_fx_demog <- ph_with_flextable(ppt_fx_demog, value = fx_demog, type = ""body"") "
+"0","print(ppt_fx_demog, target = ""all_flex_1.pptx"")"
+"1","[1]"
+"1"," ""S:/AG/AG-CSB_NeuroRad2/khalila/MULTIBAND/multiband_data_last/R_project/all_flex_1.pptx"""
+"1","
+"

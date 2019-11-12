@@ -1,0 +1,439 @@
+---
+title: "BOLD delay scan shortening"
+author: "Ahmed Khalil"
+date: "7 Oktober 2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+# rainbow plots
+library(vioplot)
+library(readr)
+library(tidyr)
+library(ggplot2)
+library(Hmisc)
+library(plyr)
+library(RColorBrewer)
+library(reshape2)
+source("https://gist.githubusercontent.com/benmarwick/2a1bb0133ff568cbe28d/raw/fb53bd97121f7f9ce947837ef1a4c65a73bffb3f/geom_flat_violin.R")
+
+# linear mixed models
+library(lme4)
+library(MuMIn)
+library(pbkrtest)
+library(ordinal)
+library(broom.mixed)
+
+# Bland-Altman analysis
+library(blandr)
+library(gridExtra)
+
+# LMM plots - https://mran.microsoft.com/snapshot/2015-08-06/web/packages/dotwhisker/vignettes/dwplot-vignette.htm
+library(dotwhisker)
+library(broom)
+
+# interrater agreement
+library(irr)
+
+# diagnostic accuracy
+library(epiR)
+```
+
+```{r, echo=FALSE, warning=FALSE}
+# define a theme to make pretty plots
+raincloud_theme = theme(
+  text = element_text(size = 20),
+  axis.title.x = element_text(size = 20),
+  axis.title.y = element_text(size = 20),
+  axis.text = element_text(size = 20),
+  legend.title=element_text(size=16),
+  legend.text=element_text(size=16),
+  legend.position = "right",
+  plot.title = element_text(lineheight=.8, face="bold", size = 16),
+  panel.grid.minor = element_blank(),
+  panel.grid.major = element_blank(),
+  axis.line.x = element_line(colour = 'black', size=0.5, linetype='solid'),
+  axis.line.y = element_line(colour = 'black', size=0.5, linetype='solid'))
+```
+
+
+```{r, echo=FALSE, warning=FALSE}
+theme_tufte_revised <- function(base_size = 11, base_family = base_font_family_tufte(), ticks = TRUE) {
+  ret <- theme_bw(base_family = base_family, base_size = base_size) + 
+    theme(
+          axis.line = element_line(color = 'black'),
+          axis.title.x = element_text(vjust = -0.3), 
+          axis.title.y = element_text(vjust = 0.8),
+          legend.background = element_blank(), 
+          legend.key = element_blank(), 
+          legend.title = element_text(face="plain"),
+          panel.background = element_blank(), 
+          panel.grid = element_blank(),
+          plot.background = element_blank(),
+          strip.background = element_blank()
+    )
+
+  if (!ticks) {
+    ret <- ret + theme(axis.ticks = element_blank())
+  }
+
+  ret
+} 
+
+```
+
+# Head motion
+```{r, echo=FALSE, warning=FALSE}
+# plot motion 
+source("plot_HM_metrics.R")
+```
+
+# Spatial similarity
+```{r, echo=FALSE, warning=FALSE}
+# load spatial similarity data
+dc_subs <- read.csv("dice_23thr.csv", sep=";")
+# make dataframe long with melt for ggplot
+dc_subs_long<- melt (data = dc_subs, value.name=c("value"))
+
+# raincloud plots
+dc_rcplot <- ggplot(data = dc_subs_long, aes(y = value, x = variable, fill = variable)) +
+  geom_flat_violin(position = position_nudge(x = .2, y = 0), alpha = .8) +
+  geom_point(aes(y = value, color = variable), position = position_jitter(width = .15), size = 1, alpha = 0.8) +
+  geom_boxplot(width = .1, guides = FALSE, outlier.shape = NA, alpha = 0.5) +
+  expand_limits(x = 5.25) +
+  guides(fill = FALSE) +
+  guides(color = FALSE) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_bw() +
+  raincloud_theme +
+  ylab("Dice similarity coefficient") +
+  ylim(c(0,1)) +
+  scale_x_discrete(labels = c("0.8","0.6","0.4","0.2")) + 
+  xlab("Scan length")
+pdf("Figure2.pdf")
+plot(dc_rcplot)
+dev.off()
+
+# make the linear mixed model for tracking the decrease in DC caused by scan shortening by 0.2 
+#replace scan segment names with relative lengths - NOTE, these are in % of the full scan (important for interpreting beta coefs)
+dc_subs_long$variable <- as.character(dc_subs_long$variable)
+dc_subs_long$variable[dc_subs_long$variable=="RS_A"] <- 20
+dc_subs_long$variable[dc_subs_long$variable=="RS_B"] <- 40
+dc_subs_long$variable[dc_subs_long$variable=="RS_C"] <- 60
+dc_subs_long$variable[dc_subs_long$variable=="RS_D"] <- 80
+dc_subs_long$variable <- as.numeric(dc_subs_long$variable)
+
+lmer_dc<-lmer(value ~ variable+(1|subject), data=dc_subs_long)
+summary(lmer_dc)
+
+# get p-values WITHOUT lmerTest (which doesn't work with dwplot) - https://www.r-bloggers.com/three-ways-to-get-parameter-specific-p-values-from-lmer/
+lmer_dc_coef <- data.frame(coef(summary(lmer_dc)))
+# get the KR-approximated degrees of freedom
+df.KR <- get_ddf_Lb(lmer_dc, fixef(lmer_dc))
+# get p-values from the t-distribution using the t-values and approximated
+# degrees of freedom
+lmer_dc_coef$p.KR <- 2 * (1 - pt(abs(lmer_dc_coef$t.value), df.KR))
+print(lmer_dc_coef)
+
+r.squaredGLMM(lmer_dc)
+```
+
+# Volumetry
+```{r, echo=FALSE, warning=FALSE}
+# load dataframe for quantitative analysis
+df_quant <- read.csv("df_quan.csv")
+df_quant$thr <- as.factor(df_quant$thr)
+
+# reorder variable levels for appropriate references
+  #full scan ref in volumetry analysis
+  df_quant$segment<- factor(df_quant$segment, c("RS_E","RS_D","RS_C","RS_B","RS_A"))
+  #follow up scans as ref
+  df_quant$session<- relevel(df_quant$session, ref="D1")
+  
+# raincloud plots
+  # get volumetry data for 0s threshold of BD maps
+  vol_0 <- df_quant[df_quant$thr=="0",]
+  vol_rcplot <- ggplot(data = vol_0, aes(y = volume, x = segment, fill = segment)) +
+  geom_flat_violin(position = position_nudge(x = .2, y = 0), alpha = .8) +
+  geom_point(aes(y = volume, color = segment), position = position_jitter(width = .15), size = 1, alpha = 0.8) +
+  geom_boxplot(width = .1, guides = FALSE, outlier.shape = NA, alpha = 0.5) +
+  expand_limits(x = 5.25) +
+  guides(fill = FALSE) +
+  guides(color = FALSE) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_bw() +
+  raincloud_theme +
+  ylab("Volume (mL)") +
+    xlab("Scan length") + 
+    scale_x_discrete(labels = c("Full", "0.8", "0.6", "0.4", "0.2"))
+
+  pdf("Supp_Fig1.pdf")
+plot(vol_rcplot)
+dev.off()
+
+  
+# Bland-Altman analysis of volumetry data - NB: this is done ONLY on the 0s thresholded BD maps
+  # get volumes of each segment
+  vol_seg_A <- df_quant[df_quant$segment=="RS_A",]
+  vol_seg_B <- df_quant[df_quant$segment=="RS_B",]
+  vol_seg_C <- df_quant[df_quant$segment=="RS_C",]
+  vol_seg_D <- df_quant[df_quant$segment=="RS_D",]
+  vol_seg_E <- df_quant[df_quant$segment=="RS_E",]
+
+  # segment A
+  BA_A <- blandr.draw(vol_seg_E[vol_seg_E$thr=="0",10],vol_seg_A[vol_seg_A$thr=="0",10], ciDisplay = FALSE, ciShading=TRUE,plotProportionalBias = TRUE, plotProportionalBias.se = TRUE, point_size = 25, plotTitle="0.2 scan") +geom_point(size = 0.1)+geom_hline(yintercept = 0, color = "black", size = 0.8)+xlab("Mean (mL)")+ylab("Difference (mL)")+theme_tufte_revised(base_size = 20, base_family = "sans")+ylim(-100,100)+theme(axis.title.y = element_text(size=20, hjust=0.5,margin = margin(t = 0, r = 25, b = 0, l = 0)))+xlim(0,200)+theme(axis.title.x = element_text(size=18, hjust=0.5,margin = margin(t = 25, r = 0, b = 0, l = 0)))
+  
+  blandr.output.text(vol_seg_E[vol_seg_E$thr=="0",10],vol_seg_A[vol_seg_A$thr=="0",10])
+  # segment B
+  BA_B <- blandr.draw(vol_seg_E[vol_seg_E$thr=="0",10],vol_seg_B[vol_seg_B$thr=="0",10], ciDisplay = FALSE, ciShading=TRUE,plotProportionalBias = TRUE, plotProportionalBias.se = TRUE, point_size = 25, plotTitle="0.4 scan") +geom_point(size = 0.1)+geom_hline(yintercept = 0, color = "black", size = 0.8)+xlab("Mean (mL)")+ylab("Difference (mL)")+theme_tufte_revised(base_size = 20, base_family = "sans")+ylim(-100,100)+theme(axis.title.y = element_text(size=20, hjust=0.5,margin = margin(t = 0, r = 25, b = 0, l = 0)))+xlim(0,200)+theme(axis.title.x = element_text(size=18, hjust=0.5,margin = margin(t = 25, r = 0, b = 0, l = 0)))
+  
+    blandr.output.text(vol_seg_E[vol_seg_E$thr=="0",10],vol_seg_B[vol_seg_B$thr=="0",10])
+
+  # segment C
+  BA_C <- blandr.draw(vol_seg_E[vol_seg_E$thr=="0",10],vol_seg_C[vol_seg_C$thr=="0",10], ciDisplay = FALSE, ciShading=TRUE,plotProportionalBias = TRUE, plotProportionalBias.se = TRUE, point_size = 25, plotTitle="0.6 scan") +geom_point(size = 0.1)+geom_hline(yintercept = 0, color = "black", size = 0.8)+xlab("Mean (mL)")+ylab("Difference (mL)")+theme_tufte_revised(base_size = 20, base_family = "sans")+ylim(-100,100)+theme(axis.title.y = element_text(size=20, hjust=0.5,margin = margin(t = 0, r = 25, b = 0, l = 0)))+xlim(0,200)+theme(axis.title.x = element_text(size=18, hjust=0.5,margin = margin(t = 25, r = 0, b = 0, l = 0)))
+  
+    blandr.output.text(vol_seg_E[vol_seg_E$thr=="0",10],vol_seg_C[vol_seg_C$thr=="0",10])
+
+  # segment D
+  BA_D <- blandr.draw(vol_seg_E[vol_seg_E$thr=="0",10],vol_seg_D[vol_seg_D$thr=="0",10], ciDisplay = FALSE, ciShading=TRUE,plotProportionalBias = TRUE, plotProportionalBias.se = TRUE, point_size = 25, plotTitle="0.8 scan") +geom_point(size = 0.1)+geom_hline(yintercept = 0, color = "black", size = 0.8)+xlab("Mean (mL)")+ylab("Difference (mL)")+theme_tufte_revised(base_size = 20, base_family = "sans")+ylim(-100,100)+theme(axis.title.y = element_text(size=20, hjust=0.5,margin = margin(t = 0, r = 25, b = 0, l = 0)))+xlim(0,200)+theme(axis.title.x = element_text(size=18, hjust=0.5,margin = margin(t = 25, r = 0, b = 0, l = 0)))
+  
+    blandr.output.text(vol_seg_E[vol_seg_E$thr=="0",10],vol_seg_D[vol_seg_D$thr=="0",10])
+    
+    # combine BA plots into one layout
+    pdf("Figure3.pdf", width = 10, height=11)
+    grid.arrange(BA_D, BA_C, BA_B, BA_A, nrow=2)
+    dev.off()
+
+#linear mixed model on volumetry data
+  #log transformation of volume as suggested by the statistician
+  df_quant$log_volume<-log(df_quant$volume)
+  #transformation of inf numbers to NA, as INF numbers cannot be omitted by lmer
+  df_quant$log_volume[which(df_quant$log_volume== -Inf)]=NA
+  df_quant$log_volume[which(is.nan(df_quant$log_volume))]=NA
+
+  
+  # rescale hm_mean for lmer plot
+    ten<-c(10)
+    df_quant$hm_mean_ten<-df_quant$hm_mean*ten
+
+    # run linear models on rescaled variables
+    # MEAN MOTION 
+    lmer_random_log_mean_ten_dvars<-lmer(log_volume ~ segment+hm_mean_ten+session+thr+hm_mean_dvars + (1| subject), data=df_quant)
+    summary(lmer_random_log_mean_ten_dvars)
+        # get p-values WITHOUT lmerTest (which doesn't work with dwplot) - https://www.r-bloggers.com/three-ways-to-get-parameter-specific-p-values-from-lmer/
+    # extract coefficients
+quant_model_mean_coef <- data.frame(coef(summary(lmer_random_log_mean_ten_dvars)))
+    # get the KR-approximated degrees of freedom
+    quant_model_mean_coef_df.KR <- get_ddf_Lb(lmer_random_log_mean_ten_dvars, fixef(lmer_random_log_mean_ten_dvars))
+    # get p-values from the t-distribution using the t-values and approximated
+    # degrees of freedom
+    quant_model_mean_coef$p.KR <- 2 * (1 - pt(abs(quant_model_mean_coef$t.value), quant_model_mean_coef_df.KR))
+    quant_model_mean_coef
+    
+
+    # plot linear mixed model of volumetry data
+# plot the models
+quant_model_mean <- tidy(lmer_random_log_mean_ten_dvars)
+quant_model_mean <- quant_model_mean[c(2,3,4,5,6,10),]
+quant_model_mean$term <- c("0.8", "0.6", "0.4", "0.2", "Mean FD", "Mean DVARS")
+
+pdf("Figure4.pdf")
+dwplot(quant_model_mean)+
+    theme_bw(20) + xlab("Standardized Coefficient") + ylab("") +
+    geom_vline(xintercept = 0, colour = "grey60", linetype = 2)+
+    scale_color_grey() + 
+    theme(legend.position="none") + xlim(c(-0.5:0.5))
+dev.off()
+
+```
+
+# Diagnostic accuracy
+```{r, echo=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+# load dataframe for qualitative analysis
+df_qual <- read.csv("df_qual.csv")
+# rescale mean FD
+df_qual$hm_mean <- df_qual$hm_mean*10
+# reorder factor levels
+df_qual$segment <- factor(df_qual$segment, levels = c("RS_E","RS_D", "RS_C", "RS_B", "RS_A"))
+
+# reorder variable levels for appropriate references
+  #yes as hypoperfusion reference
+  df_qual$hypoperf<- relevel(df_qual$hypoperf, ref=("y"))
+
+  #follow up scans as ref
+  df_qual$session <- as.factor(df_qual$session)
+  df_qual$session<- relevel(df_qual$session, ref="1")
+  #uninterpretable evaluations as ref
+  df_qual$uninterpretable<- relevel(df_qual$uninterpretable, ref="U")
+  #rater 2 as ref
+  df_qual$raters<- relevel(df_qual$raters, ref="K")
+  #"n" as ref in hypopperf_without_u
+  df_qual$hypoper_without_u<- relevel(df_qual$hypoper_without_u, ref="n")
+  #set the order of the ordinal factors for ordinal mixed model
+  df_qual$noise<- ordered(df_qual$noise, levels=c("1", "2", "3"), labels = c("Low","Medium","High"))
+  df_qual$structure_clarity<- ordered(df_qual$structure_clarity, levels=c("3", "2", "1"), labels = c("High", "Medium", "Low"))
+  
+  
+    
+  # Mixed model of interpretability
+    df_qual$segment <- factor(df_qual$segment, labels = c("Full","0.8","0.6","0.4","0.2"))
+    # set colors for spineplot
+    sp_cols <- c("#a6cee3","#1f78b4","#b2df8a")
+    pdf("Figure5.pdf", width = 10, height = 5)
+    par(mfrow=c(1,2))
+    spineplot(hypoperf~segment, data = df_qual[df_qual$raters=="K",], xlab = "Scan length", ylab = "Hypoperfusion assessment", col = sp_cols)
+    spineplot(hypoperf~segment, data = df_qual[df_qual$raters=="I",], xlab = "Scan length", ylab = "Hypoperfusion assessment", col = sp_cols)
+    dev.off()
+    
+    
+    qual_model_mean <- glmer(uninterpretable ~ hm_mean+segment+raters+session+hm_mean_dvars+(1| subject), data=df_qual, family=binomial, nAGQ =0)
+    summary(qual_model_mean)
+    
+    # get odds ratios of each fixed effect
+     print(tidy(qual_model_mean,conf.int=TRUE,exponentiate=TRUE,effects="fixed"))
+    
+    # calculate agreement between scan lengths on presence, absence, or uninterpretableness (!) of BD map 
+    # Rater K
+        # get reference (RS_E)
+    print("Intermethod agreement on map interpretation (longest to shortest scan) - Rater K")
+        sens_ref_K <- df_qual[df_qual$raters=="K" & df_qual$segment=="Full",13]
+
+        
+        # RS_D
+        sens_D_K <- df_qual[df_qual$raters=="K" & df_qual$segment=="0.8",13]
+        print(kappa2(cbind(sens_ref_K, sens_D_K)))
+          
+        # RS_C
+        sens_C_K <- df_qual[df_qual$raters=="K" & df_qual$segment=="0.6",13]
+        print(kappa2(cbind(sens_ref_K, sens_C_K)))
+        
+        # RS_B
+        sens_B_K <- df_qual[df_qual$raters=="K" & df_qual$segment=="0.4",13]
+        print(kappa2(cbind(sens_ref_K, sens_B_K)))
+        
+        # RS_A
+        sens_A_K <- df_qual[df_qual$raters=="K" & df_qual$segment=="0.2",13]
+        print(kappa2(cbind(sens_ref_K, sens_A_K)))
+
+        
+      # RATER I
+        # get reference (RS_E)
+    print("Intermethod agreement on map interpretation (longest to shortest scan) - Rater I")
+        sens_ref_I <- df_qual[df_qual$raters=="I" & df_qual$segment=="Full",13]
+
+        
+        # RS_D
+        sens_D_I <- df_qual[df_qual$raters=="I" & df_qual$segment=="0.8",13]
+        print(kappa2(cbind(sens_ref_I, sens_D_I)))
+          
+        # RS_C
+        sens_C_I <- df_qual[df_qual$raters=="I" & df_qual$segment=="0.6",13]
+        print(kappa2(cbind(sens_ref_I, sens_C_I)))
+        
+        # RS_B
+        sens_B_I <- df_qual[df_qual$raters=="I" & df_qual$segment=="0.4",13]
+        print(kappa2(cbind(sens_ref_I, sens_B_I)))
+        
+        # RS_A
+        sens_A_I <- df_qual[df_qual$raters=="I" & df_qual$segment=="0.2",13]
+        print(kappa2(cbind(sens_ref_I, sens_A_I)))
+
+```
+
+# Interrater agreement
+```{r, echo=FALSE, warning=FALSE}
+# HYPOPERFUSION
+print("Interrater agreement on hypoperfusion - from longest to shortest scan")
+kappa2(data.frame(df_qual[df_qual$raters=="K" & df_qual$segment=="Full",c(13)],df_qual[df_qual$raters=="I" & df_qual$segment=="Full",c(13)]),weight=c("squared"), sort.levels=FALSE)
+kappa2(data.frame(df_qual[df_qual$raters=="K" & df_qual$segment=="0.8",c(13)],df_qual[df_qual$raters=="I" & df_qual$segment=="0.8",c(13)]),weight=c("squared"), sort.levels=FALSE)
+kappa2(data.frame(df_qual[df_qual$raters=="K" & df_qual$segment=="0.6",c(13)],df_qual[df_qual$raters=="I" & df_qual$segment=="0.6",c(13)]),weight=c("squared"), sort.levels=FALSE)
+kappa2(data.frame(df_qual[df_qual$raters=="K" & df_qual$segment=="0.4",c(13)],df_qual[df_qual$raters=="I" & df_qual$segment=="0.4",c(13)]),weight=c("squared"), sort.levels=FALSE)
+kappa2(data.frame(df_qual[df_qual$raters=="K" & df_qual$segment=="0.2",c(13)],df_qual[df_qual$raters=="I" & df_qual$segment=="0.2",c(13)]),weight=c("squared"), sort.levels=FALSE)
+
+# NOISE
+print("Interrater agreement on noise - from longest to shortest scan")
+kappa2(data.frame(df_qual[df_qual$raters=="K" & df_qual$segment=="Full",c(11)],df_qual[df_qual$raters=="I" & df_qual$segment=="Full",c(11)]),weight=c("squared"), sort.levels=FALSE)
+kappa2(data.frame(df_qual[df_qual$raters=="K" & df_qual$segment=="0.8",c(11)],df_qual[df_qual$raters=="I" & df_qual$segment=="0.8",c(11)]),weight=c("squared"), sort.levels=FALSE)
+kappa2(data.frame(df_qual[df_qual$raters=="K" & df_qual$segment=="0.6",c(11)],df_qual[df_qual$raters=="I" & df_qual$segment=="0.6",c(11)]),weight=c("squared"), sort.levels=FALSE)
+kappa2(data.frame(df_qual[df_qual$raters=="K" & df_qual$segment=="0.4",c(11)],df_qual[df_qual$raters=="I" & df_qual$segment=="0.4",c(11)]),weight=c("squared"), sort.levels=FALSE)
+kappa2(data.frame(df_qual[df_qual$raters=="K" & df_qual$segment=="0.2",c(11)],df_qual[df_qual$raters=="I" & df_qual$segment=="0.2",c(11)]),weight=c("squared"), sort.levels=FALSE)
+
+# STRUCTURE CLARITY
+print("Interrater areement on structure clarity - from longest to shortest scan")
+kappa2(data.frame(df_qual[df_qual$raters=="K" & df_qual$segment=="Full",c(12)],df_qual[df_qual$raters=="I" & df_qual$segment=="Full",c(12)]),weight=c("squared"), sort.levels=FALSE)
+kappa2(data.frame(df_qual[df_qual$raters=="K" & df_qual$segment=="0.8",c(12)],df_qual[df_qual$raters=="I" & df_qual$segment=="0.8",c(12)]),weight=c("squared"), sort.levels=FALSE)
+kappa2(data.frame(df_qual[df_qual$raters=="K" & df_qual$segment=="0.6",c(12)],df_qual[df_qual$raters=="I" & df_qual$segment=="0.6",c(12)]),weight=c("squared"), sort.levels=FALSE)
+kappa2(data.frame(df_qual[df_qual$raters=="K" & df_qual$segment=="0.4",c(12)],df_qual[df_qual$raters=="I" & df_qual$segment=="0.4",c(12)]),weight=c("squared"), sort.levels=FALSE)
+kappa2(data.frame(df_qual[df_qual$raters=="K" & df_qual$segment=="0.2",c(12)],df_qual[df_qual$raters=="I" & df_qual$segment=="0.2",c(12)]),weight=c("squared"), sort.levels=FALSE)
+
+
+```
+
+# Map quality
+```{r, echo=FALSE, warning=FALSE, fig.width=9, fig.height=11}
+    pdf("Supp_Fig3.pdf", width = 10, height = 12)
+    par(mfrow=c(2,2))
+    spineplot(noise~segment, data = df_qual[df_qual$raters=="K",], xlab = "Scan length", ylab = "Noise", col = sp_cols)
+    spineplot(noise~segment, data = df_qual[df_qual$raters=="I",], xlab = "Scan length", ylab = "Noise", col = sp_cols)
+    spineplot(structure_clarity~segment, data = df_qual[df_qual$raters=="K",], xlab = "Scan length", ylab = "Structure clarity", col = sp_cols)
+    spineplot(structure_clarity~segment, data = df_qual[df_qual$raters=="I",], xlab = "Scan length", ylab = "Structure clarity", col = sp_cols)
+    dev.off()
+    
+# NOISE
+    noise_model_mean <- clmm(noise~hm_mean+hm_mean_dvars+raters+session+segment+(1| subject), data=df_qual)
+    summary(noise_model_mean)
+    # get odds ratios of each fixed effect
+    print(tidy(noise_model_mean,conf.int=TRUE,exponentiate=TRUE,effects="fixed"))
+    
+    
+# STRUCTURE CLARITY
+    sc_model_mean <- clmm(structure_clarity~hm_mean+hm_mean_dvars+raters+session+segment+(1| subject), data=df_qual)
+    summary(sc_model_mean)
+    # get odds ratios of each fixed effect
+    print(tidy(sc_model_mean,conf.int=TRUE,exponentiate=TRUE,effects="fixed"))
+
+```
+
+```{r, echo=FALSE, warning=FALSE, fig.width=10, fig.length=5}
+# plot models
+
+# calculate odds ratios and 95% CIs - https://stats.stackexchange.com/questions/304833/how-to-calculate-odds-ratio-and-95-confidence-interval-for-logistic-regression
+noise_model_plot <- c()
+noise_model_plot$OR <- exp(noise_model_mean$coefficients)
+noise_CIs <- exp(confint(noise_model_mean))
+noise_model_plot$CI_l <- noise_CIs[,1]
+noise_model_plot$CI_u <- noise_CIs[,2]
+noise_model_plot <- as.data.frame(noise_model_plot)
+noise_model_plot <- noise_model_plot[c(3:4,7:10),]
+noise_model_plot$variable <- c("Mean FD", "Mean DVARS", "0.8", "0.6", "0.4", "0.2")
+# rearrange rows
+noise_model_plot <- noise_model_plot[c("hm_mean_dvars","hm_mean","segment0.2","segment0.4","segment0.6","segment0.8"),]
+
+pdf("Figure6.pdf", width = 10, height =6)
+par(mfrow=c(1,2))
+# plot model results
+errbar(x = noise_model_plot$variable, y=noise_model_plot$OR, yplus = noise_model_plot$CI_u, yminus = noise_model_plot$CI_l, ylim = c(0,12), ylab = "Odds Ratio", main = "Noise")
+abline(v = 1, lty = 2)
+
+# calculate odds ratios and 95% CIs - https://stats.stackexchange.com/questions/304833/how-to-calculate-odds-ratio-and-95-confidence-interval-for-logistic-regression
+sc_model_plot <- c()
+sc_model_plot$OR <- exp(sc_model_mean$coefficients)
+sc_CIs <- exp(confint(sc_model_mean))
+sc_model_plot$CI_l <- sc_CIs[,1]
+sc_model_plot$CI_u <- sc_CIs[,2]
+sc_model_plot <- as.data.frame(sc_model_plot)
+sc_model_plot <- sc_model_plot[c(3:4,7:10),]
+sc_model_plot$variable <- c("Mean FD", "Mean DVARS", "0.8", "0.6", "0.4", "0.2")
+# rearrange rows
+sc_model_plot <- sc_model_plot[c("hm_mean_dvars","hm_mean","segment0.2","segment0.4","segment0.6","segment0.8"),]
+
+# plot model results
+errbar(x = sc_model_plot$variable, y=sc_model_plot$OR, yplus = sc_model_plot$CI_u, yminus = sc_model_plot$CI_l, ylim = c(0,12), ylab = "Odds Ratio", main = "Structure clarity")
+abline(v = 1, lty = 2)
+dev.off()
+```
+```

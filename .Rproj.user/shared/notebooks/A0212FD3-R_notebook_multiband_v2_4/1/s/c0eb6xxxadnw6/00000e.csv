@@ -1,0 +1,42 @@
+"0","#use Bland Altman function from MethCamp R package, loop through segments at different time lag thresholds"
+"0","for (x in 1:length(segments_46)) {"
+"0","  volumes_subset_x <- get(paste(segments_46[x],""volumes_subset_data"", sep = ""_""))"
+"0","  namx<-paste(""RS_E"", segments_46[x], sep="""") "
+"0","  assign (namx, BlandAltman(E46_volumes_subset_data$Volume, volumes_subset_x$Volume, maintit=paste(""Segments E and"", segments_46[x]),xlab=""Mean (mL)"", ylab= ""Difference (mL)"" , pch=16, print=FALSE))"
+"0","}"
+"1","NOTE:
+"
+"1"," "
+"1","'AB.plot' and 'BlandAltman' are deprecated,
+ and likely to disappear"
+"1"," "
+"1","in a not too distant future,
+ use 'BA.plot' instead.
+"
+"1","NOTE:
+"
+"1"," "
+"1","'AB.plot' and 'BlandAltman' are deprecated,
+ and likely to disappear"
+"1"," "
+"1","in a not too distant future,
+ use 'BA.plot' instead.
+"
+"1","NOTE:
+"
+"1"," "
+"1","'AB.plot' and 'BlandAltman' are deprecated,
+ and likely to disappear"
+"1"," "
+"1","in a not too distant future,
+ use 'BA.plot' instead.
+"
+"1","NOTE:
+"
+"1"," "
+"1","'AB.plot' and 'BlandAltman' are deprecated,
+ and likely to disappear"
+"1"," "
+"1","in a not too distant future,
+ use 'BA.plot' instead.
+"

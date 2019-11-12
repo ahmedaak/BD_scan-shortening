@@ -1,0 +1,8 @@
+"0","#border_inner_h(fx_demog, border = big_b, part=""body"")"
+"0","#fx_demog<- hline_top( fx_demog, border = big_b, part = ""body"" )"
+"0"," fx_demog<-set_header_labels(fx_demog, X1 = "" "", X2= "" "", X3= ""qualitative analysis (n=63)"", X4= ""Quantitative analysis (n=42)"")"
+"0","fx_demog<-merge_v(fx_demog, j=c(1))"
+"0","fx_demog<-fontsize(fx_demog, part = ""body"", size = 14) "
+"0","fx_demog<-align(fx_demog, align = ""center"", part=""body"")"
+"0","fx_demog<-height(fx_demog, height = .5, part = ""body"")"
+"0","fx_demog"

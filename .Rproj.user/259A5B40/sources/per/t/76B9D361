@@ -1,0 +1,32 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1570625796710.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "76B9D361",
+    "lastKnownWriteTime" : 8389754657483784192,
+    "last_content_update" : 1570625796710,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "E4B76A6",
+        "caption" : "quant_model_mean",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=quant_model_mean&cache_key=E4B76A6",
+        "displayedObservations" : 25,
+        "environment" : "",
+        "object" : "quant_model_mean",
+        "preview" : 0,
+        "totalObservations" : 25,
+        "variables" : 5
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

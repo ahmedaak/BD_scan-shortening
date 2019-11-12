@@ -1,0 +1,2 @@
+"0","#chek the normality of the variance, normally plotting the residuals against continus covariate will be enough"
+"0","qqmath(lmer_random_log_mean_dvars, id=0.005) #looks like fit got better with logaritmic transformation, anova comparison cannot be executed between models with and without log transformation"
